@@ -9,6 +9,8 @@ type mode int
 const (
 	modeList mode = iota
 	modeLogs
+	modeStats
+	modeHelp
 )
 
 type logLineMsg struct {

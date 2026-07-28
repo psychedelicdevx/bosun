@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -35,7 +36,14 @@ type Model struct {
 	logCancel context.CancelFunc
 	logGen    int
 
+	stats       docker.Stats
+	haveStats   bool
+	statsChan   <-chan docker.Stats
+	statsCancel context.CancelFunc
+	statsGen    int
+
 	status      string
+	statusGen   int
 	confirming  bool
 	pendingID   string
 	pendingName string
@@ -55,6 +63,21 @@ type containersMsg []docker.Container
 
 type errMsg struct{ err error }
 
+type tickMsg struct{}
+
+type statusClearMsg struct{ gen int }
+
+func tick() tea.Cmd {
+	return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return tickMsg{} })
+}
+
+func (m *Model) setStatus(s string) tea.Cmd {
+	m.status = s
+	m.statusGen++
+	gen := m.statusGen
+	return tea.Tick(3*time.Second, func(time.Time) tea.Msg { return statusClearMsg{gen} })
+}
+
 func (m Model) fetch() tea.Msg {
 	list, err := m.client.List(context.Background())
 	if err != nil {
@@ -64,7 +87,7 @@ func (m Model) fetch() tea.Msg {
 }
 
 func (m Model) Init() tea.Cmd {
-	return m.fetch
+	return tea.Batch(m.fetch, tick())
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -74,6 +97,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.vp.Width = msg.Width
 		m.vp.Height = max(1, msg.Height-3)
 		return m, nil
+	case tickMsg:
+		return m, tea.Batch(m.fetch, tick())
 	case containersMsg:
 		m.containers = msg
 		m.loaded = true
@@ -85,24 +110,52 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		m.loaded = true
 		return m, nil
+	case statusClearMsg:
+		if msg.gen == m.statusGen {
+			m.status = ""
+		}
+		return m, nil
 	case logLineMsg:
 		if msg.gen != m.logGen {
 			return m, nil
 		}
+		atBottom := m.vp.AtBottom()
 		m.logLines = append(m.logLines, msg.line)
 		m.vp.SetContent(strings.Join(m.logLines, "\n"))
-		m.vp.GotoBottom()
+		if atBottom {
+			m.vp.GotoBottom()
+		}
 		return m, waitForLog(m.logGen, m.logChan)
 	case logClosedMsg:
 		return m, nil
-	case actionDoneMsg:
-		m.status = actionStatus(msg)
-		return m, m.fetch
-	case tea.KeyMsg:
-		if m.mode == modeLogs {
-			return m.updateLogs(msg)
+	case statsMsg:
+		if msg.gen != m.statsGen {
+			return m, nil
 		}
-		return m.updateList(msg)
+		m.stats = msg.s
+		m.haveStats = true
+		return m, waitForStats(m.statsGen, m.statsChan)
+	case statsClosedMsg:
+		return m, nil
+	case actionDoneMsg:
+		return m, tea.Batch(m.setStatus(actionStatus(msg)), m.fetch)
+	case execDoneMsg:
+		if msg.err != nil {
+			return m, m.setStatus("exec " + msg.name + " failed: " + msg.err.Error())
+		}
+		return m, tea.Batch(m.setStatus("left shell: "+msg.name), m.fetch)
+	case tea.KeyMsg:
+		switch m.mode {
+		case modeLogs:
+			return m.updateLogs(msg)
+		case modeStats:
+			return m.updateStats(msg)
+		case modeHelp:
+			m.mode = modeList
+			return m, nil
+		default:
+			return m.updateList(msg)
+		}
 	}
 	return m, nil
 }
@@ -112,12 +165,10 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "y", "enter":
 			m.confirming = false
-			m.status = "removing " + m.pendingName + "..."
-			return m, m.doAction("remove", m.pendingID, m.pendingName)
+			return m, tea.Batch(m.setStatus("removing "+m.pendingName+"..."), m.doAction("remove", m.pendingID, m.pendingName))
 		default:
 			m.confirming = false
-			m.status = "cancelled"
-			return m, nil
+			return m, m.setStatus("cancelled")
 		}
 	}
 
@@ -132,6 +183,8 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.cursor > 0 {
 			m.cursor--
 		}
+	case "?":
+		m.mode = modeHelp
 	case "enter":
 		if len(m.containers) == 0 {
 			return m, nil
@@ -153,14 +206,42 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.vp.GotoTop()
 		m.mode = modeLogs
 		return m, waitForLog(m.logGen, ch)
+	case "S":
+		if len(m.containers) == 0 {
+			return m, nil
+		}
+		ct := m.containers[m.cursor]
+		if ct.State != "running" {
+			return m, m.setStatus(ct.Name + " is not running")
+		}
+		m.statsGen++
+		ctx, cancel := context.WithCancel(context.Background())
+		ch, err := m.client.Stats(ctx, ct.ID)
+		if err != nil {
+			cancel()
+			return m, m.setStatus("stats failed: " + err.Error())
+		}
+		m.statsCancel = cancel
+		m.statsChan = ch
+		m.haveStats = false
+		m.mode = modeStats
+		return m, waitForStats(m.statsGen, ch)
+	case "e":
+		if len(m.containers) == 0 {
+			return m, nil
+		}
+		ct := m.containers[m.cursor]
+		if ct.State != "running" {
+			return m, m.setStatus(ct.Name + " is not running")
+		}
+		return m, execShell(ct.ID, ct.Name)
 	case "s", "x", "r":
 		if len(m.containers) == 0 {
 			return m, nil
 		}
 		ct := m.containers[m.cursor]
 		verb := map[string]string{"s": "start", "x": "stop", "r": "restart"}[msg.String()]
-		m.status = verb + "ing " + ct.Name + "..."
-		return m, m.doAction(verb, ct.ID, ct.Name)
+		return m, tea.Batch(m.setStatus(verb+"ing "+ct.Name+"..."), m.doAction(verb, ct.ID, ct.Name))
 	case "d":
 		if len(m.containers) == 0 {
 			return m, nil
@@ -175,8 +256,13 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	if m.mode == modeLogs {
+	switch m.mode {
+	case modeLogs:
 		return m.logsView()
+	case modeStats:
+		return m.statsView()
+	case modeHelp:
+		return m.helpView()
 	}
 	return m.listView()
 }
@@ -200,7 +286,11 @@ func (m Model) listView() string {
 		case "running":
 			style = runningStyle
 		case "exited", "dead":
-			style = erroredStyle
+			if strings.HasPrefix(ct.Status, "Exited (0)") {
+				style = stoppedStyle
+			} else {
+				style = erroredStyle
+			}
 		}
 		row := fmt.Sprintf("%-24s  %s", ct.Name, ct.Status)
 		if i == m.cursor {
@@ -215,6 +305,6 @@ func (m Model) listView() string {
 	} else if m.status != "" {
 		b.WriteString(hintStyle.Render(m.status) + "\n")
 	}
-	b.WriteString(hintStyle.Render("↑/↓ move · enter logs · s start · x stop · r restart · d remove · q quit") + "\n")
+	b.WriteString(hintStyle.Render("↑/↓ move · enter logs · S stats · e shell · s/x/r/d actions · ? help · q quit") + "\n")
 	return b.String()
 }
