@@ -94,26 +94,28 @@ func (m Model) listBody() string {
 	}
 	var b strings.Builder
 	for i, r := range rs {
+		marker := "  "
+		if i == m.cursor {
+			marker = borderActiveStyle.Render("› ")
+		}
 		if r.header {
 			chevron := "▼"
 			if m.collapsed[r.project] {
 				chevron = "▶"
 			}
-			line := chevron + " " + r.project
+			label := chevron + " " + r.project
 			if i == m.cursor {
-				line = selectedStyle.Render(line)
+				label = selectedStyle.Render(label)
 			} else {
-				line = headerStyle.Render(line)
+				label = headerStyle.Render(label)
 			}
-			b.WriteString(line)
+			b.WriteString(marker + label)
 		} else {
 			name := r.ct.Name
-			cur := "  "
 			if i == m.cursor {
-				cur = borderActiveStyle.Render("› ")
 				name = selectedStyle.Render(name)
 			}
-			b.WriteString("  " + cur + stateStyle(r.ct).Render("●") + " " + name)
+			b.WriteString(marker + "  " + stateStyle(r.ct).Render("●") + " " + name)
 		}
 		if i < len(rs)-1 {
 			b.WriteString("\n")
