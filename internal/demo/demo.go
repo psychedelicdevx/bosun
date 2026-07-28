@@ -17,14 +17,14 @@ type Engine struct {
 
 func New() *Engine {
 	return &Engine{containers: []docker.Container{
-		{ID: "a1b2c3d4e5f6", Name: "web", Image: "nginx:1.27", State: "running", Status: "Up 3 days"},
-		{ID: "b2c3d4e5f6a1", Name: "api", Image: "ghcr.io/acme/api:latest", State: "running", Status: "Up 3 days (healthy)"},
-		{ID: "c3d4e5f6a1b2", Name: "postgres", Image: "postgres:16", State: "running", Status: "Up 3 days"},
-		{ID: "d4e5f6a1b2c3", Name: "redis", Image: "redis:7", State: "running", Status: "Up 3 days"},
-		{ID: "e5f6a1b2c3d4", Name: "worker", Image: "ghcr.io/acme/worker:latest", State: "running", Status: "Up 2 days"},
+		{ID: "a1b2c3d4e5f6", Name: "shop-web", Image: "nginx:1.27", State: "running", Status: "Up 3 days", Project: "shop"},
+		{ID: "b2c3d4e5f6a1", Name: "shop-api", Image: "ghcr.io/acme/api:latest", State: "running", Status: "Up 3 days (healthy)", Project: "shop"},
+		{ID: "c3d4e5f6a1b2", Name: "shop-postgres", Image: "postgres:16", State: "running", Status: "Up 3 days", Project: "shop"},
+		{ID: "0a1b2c3d4e5f", Name: "shop-migrate", Image: "ghcr.io/acme/migrate:1.4", State: "exited", Status: "Exited (0) 3 days ago", Project: "shop"},
+		{ID: "d4e5f6a1b2c3", Name: "blog-web", Image: "ghost:5", State: "running", Status: "Up 5 days", Project: "blog"},
+		{ID: "e5f6a1b2c3d4", Name: "blog-db", Image: "mysql:8", State: "running", Status: "Up 5 days", Project: "blog"},
 		{ID: "f6a1b2c3d4e5", Name: "mailpit", Image: "axllent/mailpit", State: "running", Status: "Up 3 days"},
-		{ID: "0a1b2c3d4e5f", Name: "migrate", Image: "ghcr.io/acme/migrate:1.4", State: "exited", Status: "Exited (0) 3 days ago"},
-		{ID: "1b2c3d4e5f60", Name: "seed", Image: "ghcr.io/acme/seed:1.4", State: "exited", Status: "Exited (1) 3 days ago"},
+		{ID: "1b2c3d4e5f60", Name: "registry", Image: "registry:2", State: "exited", Status: "Exited (143) 1 week ago"},
 	}}
 }
 
