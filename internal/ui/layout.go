@@ -74,15 +74,26 @@ func (m Model) dims() (leftW, rightW, panelH int) {
 	return
 }
 
+func (m Model) listTitle() string {
+	if m.filter != "" || m.filtering {
+		return fmt.Sprintf("Containers (%d/%d)", len(m.visible()), len(m.containers))
+	}
+	return "Containers"
+}
+
 func (m Model) listBody() string {
 	if !m.loaded {
 		return "loading..."
 	}
-	if len(m.containers) == 0 {
+	vis := m.visible()
+	if len(vis) == 0 {
+		if m.filter != "" || m.filtering {
+			return hintStyle.Render("no match")
+		}
 		return hintStyle.Render("no containers")
 	}
 	var b strings.Builder
-	for i, ct := range m.containers {
+	for i, ct := range vis {
 		name := ct.Name
 		cur := "  "
 		if i == m.cursor {
@@ -90,7 +101,7 @@ func (m Model) listBody() string {
 			name = selectedStyle.Render(name)
 		}
 		b.WriteString(cur + stateStyle(ct).Render("●") + " " + name)
-		if i < len(m.containers)-1 {
+		if i < len(vis)-1 {
 			b.WriteString("\n")
 		}
 	}
@@ -122,8 +133,8 @@ func (m Model) statsBody() string {
 
 func (m Model) rightTitle() string {
 	name := ""
-	if m.cursor < len(m.containers) {
-		name = m.containers[m.cursor].Name
+	if ct, ok := m.selected(); ok {
+		name = ct.Name
 	}
 	switch m.right {
 	case viewLogs:
@@ -142,10 +153,11 @@ func (m Model) rightBody() string {
 	case viewStats:
 		return m.statsBody()
 	default:
-		if m.cursor >= len(m.containers) {
+		ct, ok := m.selected()
+		if !ok {
 			return hintStyle.Render("no container selected")
 		}
-		return detailsBody(m.containers[m.cursor])
+		return detailsBody(ct)
 	}
 }
 
@@ -153,8 +165,14 @@ func (m Model) bottomBar() string {
 	if m.confirming {
 		return erroredStyle.Render(" remove " + m.pendingName + "? (y/n)")
 	}
+	if m.filtering {
+		return " " + labelStyle.Render("filter ") + m.filter + borderActiveStyle.Render("▏")
+	}
+	if m.filter != "" {
+		return " " + labelStyle.Render("filter ") + m.filter + hintStyle.Render("   esc clears")
+	}
 	if m.status != "" {
 		return hintStyle.Render(" " + m.status)
 	}
-	return hintStyle.Render(" tab focus · enter logs · S stats · e shell · s/x/r/d actions · ? help · q quit")
+	return hintStyle.Render(" / filter · tab focus · enter logs · S stats · e shell · s/x/r/d · ? help · q quit")
 }

@@ -60,6 +60,9 @@ type Model struct {
 	pendingID   string
 	pendingName string
 
+	filter    string
+	filtering bool
+
 	width  int
 	height int
 }
@@ -97,6 +100,38 @@ func (m *Model) toDetails() {
 	m.focusRight = false
 }
 
+func (m Model) visible() []docker.Container {
+	if m.filter == "" {
+		return m.containers
+	}
+	q := strings.ToLower(m.filter)
+	var out []docker.Container
+	for _, c := range m.containers {
+		if strings.Contains(strings.ToLower(c.Name), q) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func (m Model) selected() (docker.Container, bool) {
+	v := m.visible()
+	if m.cursor < 0 || m.cursor >= len(v) {
+		return docker.Container{}, false
+	}
+	return v[m.cursor], true
+}
+
+func (m *Model) clampCursor() {
+	n := len(m.visible())
+	if m.cursor > n-1 {
+		m.cursor = max(0, n-1)
+	}
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+}
+
 func (m Model) fetch() tea.Msg {
 	list, err := m.client.List(context.Background())
 	if err != nil {
@@ -122,9 +157,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case containersMsg:
 		m.containers = msg
 		m.loaded = true
-		if m.cursor > len(m.containers)-1 {
-			m.cursor = max(0, len(m.containers)-1)
-		}
+		m.clampCursor()
 		return m, nil
 	case errMsg:
 		m.err = msg.err
@@ -186,6 +219,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if m.filtering {
+		return m.updateFilter(msg)
+	}
+
 	switch msg.String() {
 	case "q", "ctrl+c":
 		m.stopLogs()
@@ -197,8 +234,20 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "tab":
 		m.focusRight = !m.focusRight
 		return m, nil
-	case "esc":
+	case "/":
 		m.toDetails()
+		m.filtering = true
+		m.cursor = 0
+		return m, nil
+	case "esc":
+		if m.right != viewDetails || m.focusRight {
+			m.toDetails()
+			return m, nil
+		}
+		if m.filter != "" {
+			m.filter = ""
+			m.cursor = 0
+		}
 		return m, nil
 	}
 
@@ -210,7 +259,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "down", "j":
-		if m.cursor < len(m.containers)-1 {
+		if m.cursor < len(m.visible())-1 {
 			m.toDetails()
 			m.cursor++
 		}
@@ -224,26 +273,26 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "S":
 		return m.openStats()
 	case "e":
-		if m.cursor >= len(m.containers) {
+		ct, ok := m.selected()
+		if !ok {
 			return m, nil
 		}
-		ct := m.containers[m.cursor]
 		if ct.State != "running" {
 			return m, m.setStatus(ct.Name + " is not running")
 		}
 		return m, execShell(ct.ID, ct.Name)
 	case "s", "x", "r":
-		if m.cursor >= len(m.containers) {
+		ct, ok := m.selected()
+		if !ok {
 			return m, nil
 		}
-		ct := m.containers[m.cursor]
 		verb := map[string]string{"s": "start", "x": "stop", "r": "restart"}[msg.String()]
 		return m, tea.Batch(m.setStatus(verb+"ing "+ct.Name+"..."), m.doAction(verb, ct.ID, ct.Name))
 	case "d":
-		if m.cursor >= len(m.containers) {
+		ct, ok := m.selected()
+		if !ok {
 			return m, nil
 		}
-		ct := m.containers[m.cursor]
 		m.confirming = true
 		m.pendingID = ct.ID
 		m.pendingName = ct.Name
@@ -251,14 +300,38 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		m.filtering = false
+	case tea.KeyEsc:
+		m.filtering = false
+		m.filter = ""
+		m.cursor = 0
+	case tea.KeyBackspace:
+		if len(m.filter) > 0 {
+			m.filter = m.filter[:len(m.filter)-1]
+			m.cursor = 0
+		}
+	case tea.KeySpace:
+		m.filter += " "
+		m.cursor = 0
+	case tea.KeyRunes:
+		m.filter += string(msg.Runes)
+		m.cursor = 0
+	}
+	return m, nil
+}
+
 func (m Model) openLogs() (tea.Model, tea.Cmd) {
-	if m.cursor >= len(m.containers) {
+	sel, ok := m.selected()
+	if !ok {
 		return m, nil
 	}
 	m.stopStats()
 	m.logGen++
 	ctx, cancel := context.WithCancel(context.Background())
-	ch, err := m.client.Logs(ctx, m.containers[m.cursor].ID)
+	ch, err := m.client.Logs(ctx, sel.ID)
 	if err != nil {
 		cancel()
 		return m, m.setStatus("logs failed: " + err.Error())
@@ -274,10 +347,10 @@ func (m Model) openLogs() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) openStats() (tea.Model, tea.Cmd) {
-	if m.cursor >= len(m.containers) {
+	ct, ok := m.selected()
+	if !ok {
 		return m, nil
 	}
-	ct := m.containers[m.cursor]
 	if ct.State != "running" {
 		return m, m.setStatus(ct.Name + " is not running")
 	}
@@ -306,7 +379,7 @@ func (m Model) View() string {
 			"\n" + hintStyle.Render(" q quit")
 	}
 	leftW, rightW, panelH := m.dims()
-	left := panel("Containers", m.listBody(), leftW, panelH, !m.focusRight && !m.helpOpen)
+	left := panel(m.listTitle(), m.listBody(), leftW, panelH, !m.focusRight && !m.helpOpen)
 	right := panel(m.rightTitle(), m.rightBody(), rightW, panelH, m.focusRight && !m.helpOpen)
 	view := lipgloss.JoinHorizontal(lipgloss.Top, left, right) + "\n" + m.bottomBar()
 

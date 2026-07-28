@@ -75,3 +75,32 @@ func TestRemoveNeedsConfirm(t *testing.T) {
 		t.Fatalf("n should cancel, got confirming=%v status=%q", m.confirming, m.status)
 	}
 }
+
+func TestFilterMatchesAndSelects(t *testing.T) {
+	m := New(nil)
+	m = send(m, containersMsg{
+		{Name: "web", ID: "1"}, {Name: "api", ID: "2"},
+		{Name: "web-worker", ID: "3"}, {Name: "db", ID: "4"},
+	})
+
+	m = send(m, key("/"))
+	if !m.filtering {
+		t.Fatal("/ should enter filtering")
+	}
+	for _, r := range "web" {
+		m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	if got := len(m.visible()); got != 2 {
+		t.Fatalf("filter web: want 2 visible, got %d", got)
+	}
+
+	sel, ok := m.selected()
+	if !ok || sel.ID != "1" {
+		t.Fatalf("cursor should land on first match web, got %+v ok=%v", sel, ok)
+	}
+
+	m = send(m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.filtering || m.filter != "" || len(m.visible()) != 4 {
+		t.Fatalf("esc should clear filter, got filtering=%v filter=%q visible=%d", m.filtering, m.filter, len(m.visible()))
+	}
+}
