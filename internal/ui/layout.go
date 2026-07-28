@@ -28,7 +28,7 @@ func panel(title, body string, width, height int, active bool) string {
 	inner := max(1, width-2)
 	bodyH := max(1, height-2)
 
-	label := fit(" "+title+" ", max(1, inner-1))
+	label := lipgloss.NewStyle().MaxWidth(max(1, inner-1)).Render(" " + title + " ")
 	fill := max(0, inner-1-lipgloss.Width(label))
 	top := bs.Render("╭─") + ts.Render(label) + bs.Render(strings.Repeat("─", fill)) + bs.Render("╮")
 
