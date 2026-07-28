@@ -12,17 +12,6 @@ import (
 	"github.com/psychedelicdevx/bosun/internal/docker"
 )
 
-var (
-	runningStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	stoppedStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	erroredStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	headerStyle       = lipgloss.NewStyle().Bold(true)
-	hintStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	labelStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	selRowStyle       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("252")).Background(lipgloss.Color("237"))
-	borderActiveStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
-)
-
 type rightView int
 
 const (
@@ -64,6 +53,7 @@ type Model struct {
 	filtering bool
 
 	collapsed map[string]bool
+	themeIdx  int
 
 	width  int
 	height int
@@ -74,6 +64,7 @@ func New(client Engine) Model {
 		client:    client,
 		vp:        viewport.New(80, 20),
 		collapsed: map[string]bool{},
+		themeIdx:  themeIndex(CurrentTheme),
 	}
 }
 
@@ -237,6 +228,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "tab":
 		m.focusRight = !m.focusRight
 		return m, nil
+	case "T":
+		m.themeIdx = (m.themeIdx + 1) % len(ThemeNames)
+		ApplyTheme(ThemeNames[m.themeIdx])
+		return m, m.setStatus("theme: " + ThemeNames[m.themeIdx])
 	case "/":
 		m.toDetails()
 		m.filtering = true

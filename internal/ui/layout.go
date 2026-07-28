@@ -9,12 +9,6 @@ import (
 	"github.com/psychedelicdevx/bosun/internal/docker"
 )
 
-const (
-	borderDim    = lipgloss.Color("240")
-	borderActive = lipgloss.Color("42")
-	labelDim     = lipgloss.Color("245")
-)
-
 func panel(title, body string, width, height int, active bool) string {
 	bc := borderDim
 	lc := labelDim

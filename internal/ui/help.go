@@ -16,6 +16,7 @@ func (m Model) helpBox() string {
 		{"r", "restart container"},
 		{"d", "remove container (asks to confirm)"},
 		{"esc", "back to details"},
+		{"T", "cycle color theme"},
 		{"?", "close this help"},
 		{"q", "quit"},
 	}
