@@ -1,29 +1,37 @@
 package ui
 
-import "strings"
+import (
+	"strings"
 
-func (m Model) helpView() string {
+	"github.com/charmbracelet/lipgloss"
+)
+
+func (m Model) helpOverlay() string {
 	rows := [][2]string{
 		{"↑ / ↓", "move selection (also j / k)"},
-		{"enter", "stream logs for selected container"},
+		{"tab", "switch focus between panels"},
+		{"enter", "stream logs for the selected container"},
 		{"S", "live CPU / memory stats"},
-		{"e", "exec a shell into a running container"},
+		{"e", "shell into a running container"},
 		{"s", "start container"},
 		{"x", "stop container"},
 		{"r", "restart container"},
 		{"d", "remove container (asks to confirm)"},
-		{"esc", "back to the list"},
+		{"esc", "back to details"},
 		{"?", "toggle this help"},
 		{"q", "quit"},
 	}
 
 	var b strings.Builder
-	b.WriteString(headerStyle.Render("bosun — keybindings") + "\n\n")
-	for _, r := range rows {
-		b.WriteString("  " + headerStyle.Render(pad(r[0], 8)) + hintStyle.Render(r[1]) + "\n")
+	for i, r := range rows {
+		b.WriteString(headerStyle.Render(pad(r[0], 8)) + labelStyle.Render(r[1]))
+		if i < len(rows)-1 {
+			b.WriteString("\n")
+		}
 	}
-	b.WriteString("\n" + hintStyle.Render("press any key to close") + "\n")
-	return b.String()
+
+	box := panel("Keybindings", b.String(), 44, len(rows)+2, true)
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
 }
 
 func pad(s string, w int) string {

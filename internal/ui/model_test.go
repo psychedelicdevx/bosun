@@ -47,7 +47,7 @@ func TestCursorStaysInBounds(t *testing.T) {
 
 func TestStaleLogLinesIgnored(t *testing.T) {
 	m := New(nil)
-	m.mode = modeLogs
+	m.right = viewLogs
 	m.logGen = 2
 
 	m = send(m, logLineMsg{gen: 1, line: "old stream"})

@@ -2,7 +2,6 @@ package ui
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -14,12 +13,22 @@ import (
 )
 
 var (
-	runningStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	stoppedStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	erroredStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	headerStyle   = lipgloss.NewStyle().Bold(true)
-	hintStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("236"))
+	runningStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	stoppedStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	erroredStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	headerStyle       = lipgloss.NewStyle().Bold(true)
+	hintStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	labelStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	selectedStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
+	borderActiveStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
+)
+
+type rightView int
+
+const (
+	viewDetails rightView = iota
+	viewLogs
+	viewStats
 )
 
 type Model struct {
@@ -29,7 +38,10 @@ type Model struct {
 	loaded     bool
 	err        error
 
-	mode      mode
+	right      rightView
+	focusRight bool
+	helpOpen   bool
+
 	vp        viewport.Model
 	logLines  []string
 	logChan   <-chan string
@@ -78,6 +90,13 @@ func (m *Model) setStatus(s string) tea.Cmd {
 	return tea.Tick(3*time.Second, func(time.Time) tea.Msg { return statusClearMsg{gen} })
 }
 
+func (m *Model) toDetails() {
+	m.stopLogs()
+	m.stopStats()
+	m.right = viewDetails
+	m.focusRight = false
+}
+
 func (m Model) fetch() tea.Msg {
 	list, err := m.client.List(context.Background())
 	if err != nil {
@@ -94,8 +113,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.vp.Width = msg.Width
-		m.vp.Height = max(1, msg.Height-3)
+		_, rightW, panelH := m.dims()
+		m.vp.Width = max(1, rightW-2)
+		m.vp.Height = max(1, panelH-2)
 		return m, nil
 	case tickMsg:
 		return m, tea.Batch(m.fetch, tick())
@@ -145,22 +165,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(m.setStatus("left shell: "+msg.name), m.fetch)
 	case tea.KeyMsg:
-		switch m.mode {
-		case modeLogs:
-			return m.updateLogs(msg)
-		case modeStats:
-			return m.updateStats(msg)
-		case modeHelp:
-			m.mode = modeList
-			return m, nil
-		default:
-			return m.updateList(msg)
-		}
+		return m.handleKey(msg)
 	}
 	return m, nil
 }
 
-func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.helpOpen {
+		m.helpOpen = false
+		return m, nil
+	}
 	if m.confirming {
 		switch msg.String() {
 		case "y", "enter":
@@ -174,60 +188,43 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "q", "ctrl+c":
+		m.stopLogs()
+		m.stopStats()
 		return m, tea.Quit
+	case "?":
+		m.helpOpen = true
+		return m, nil
+	case "tab":
+		m.focusRight = !m.focusRight
+		return m, nil
+	case "esc":
+		m.toDetails()
+		return m, nil
+	}
+
+	if m.focusRight && m.right == viewLogs {
+		var cmd tea.Cmd
+		m.vp, cmd = m.vp.Update(msg)
+		return m, cmd
+	}
+
+	switch msg.String() {
 	case "down", "j":
 		if m.cursor < len(m.containers)-1 {
+			m.toDetails()
 			m.cursor++
 		}
 	case "up", "k":
 		if m.cursor > 0 {
+			m.toDetails()
 			m.cursor--
 		}
-	case "?":
-		m.mode = modeHelp
 	case "enter":
-		if len(m.containers) == 0 {
-			return m, nil
-		}
-		m.logGen++
-		ctx, cancel := context.WithCancel(context.Background())
-		ch, err := m.client.Logs(ctx, m.containers[m.cursor].ID)
-		if err != nil {
-			cancel()
-			m.logLines = []string{"error opening logs: " + err.Error()}
-			m.vp.SetContent(m.logLines[0])
-			m.mode = modeLogs
-			return m, nil
-		}
-		m.logCancel = cancel
-		m.logChan = ch
-		m.logLines = nil
-		m.vp.SetContent("")
-		m.vp.GotoTop()
-		m.mode = modeLogs
-		return m, waitForLog(m.logGen, ch)
+		return m.openLogs()
 	case "S":
-		if len(m.containers) == 0 {
-			return m, nil
-		}
-		ct := m.containers[m.cursor]
-		if ct.State != "running" {
-			return m, m.setStatus(ct.Name + " is not running")
-		}
-		m.statsGen++
-		ctx, cancel := context.WithCancel(context.Background())
-		ch, err := m.client.Stats(ctx, ct.ID)
-		if err != nil {
-			cancel()
-			return m, m.setStatus("stats failed: " + err.Error())
-		}
-		m.statsCancel = cancel
-		m.statsChan = ch
-		m.haveStats = false
-		m.mode = modeStats
-		return m, waitForStats(m.statsGen, ch)
+		return m.openStats()
 	case "e":
-		if len(m.containers) == 0 {
+		if m.cursor >= len(m.containers) {
 			return m, nil
 		}
 		ct := m.containers[m.cursor]
@@ -236,75 +233,84 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, execShell(ct.ID, ct.Name)
 	case "s", "x", "r":
-		if len(m.containers) == 0 {
+		if m.cursor >= len(m.containers) {
 			return m, nil
 		}
 		ct := m.containers[m.cursor]
 		verb := map[string]string{"s": "start", "x": "stop", "r": "restart"}[msg.String()]
 		return m, tea.Batch(m.setStatus(verb+"ing "+ct.Name+"..."), m.doAction(verb, ct.ID, ct.Name))
 	case "d":
-		if len(m.containers) == 0 {
+		if m.cursor >= len(m.containers) {
 			return m, nil
 		}
 		ct := m.containers[m.cursor]
 		m.confirming = true
 		m.pendingID = ct.ID
 		m.pendingName = ct.Name
-		return m, nil
 	}
 	return m, nil
 }
 
-func (m Model) View() string {
-	switch m.mode {
-	case modeLogs:
-		return m.logsView()
-	case modeStats:
-		return m.statsView()
-	case modeHelp:
-		return m.helpView()
+func (m Model) openLogs() (tea.Model, tea.Cmd) {
+	if m.cursor >= len(m.containers) {
+		return m, nil
 	}
-	return m.listView()
+	m.stopStats()
+	m.logGen++
+	ctx, cancel := context.WithCancel(context.Background())
+	ch, err := m.client.Logs(ctx, m.containers[m.cursor].ID)
+	if err != nil {
+		cancel()
+		return m, m.setStatus("logs failed: " + err.Error())
+	}
+	m.logCancel = cancel
+	m.logChan = ch
+	m.logLines = nil
+	m.vp.SetContent("")
+	m.vp.GotoTop()
+	m.right = viewLogs
+	m.focusRight = true
+	return m, waitForLog(m.logGen, ch)
 }
 
-func (m Model) listView() string {
-	if m.err != nil {
-		return fmt.Sprintf("cannot reach docker: %v\n\n%s\n", m.err, hintStyle.Render("q quit"))
+func (m Model) openStats() (tea.Model, tea.Cmd) {
+	if m.cursor >= len(m.containers) {
+		return m, nil
 	}
-	if !m.loaded {
-		return "loading containers...\n"
+	ct := m.containers[m.cursor]
+	if ct.State != "running" {
+		return m, m.setStatus(ct.Name + " is not running")
+	}
+	m.stopLogs()
+	m.statsGen++
+	ctx, cancel := context.WithCancel(context.Background())
+	ch, err := m.client.Stats(ctx, ct.ID)
+	if err != nil {
+		cancel()
+		return m, m.setStatus("stats failed: " + err.Error())
+	}
+	m.statsCancel = cancel
+	m.statsChan = ch
+	m.haveStats = false
+	m.right = viewStats
+	m.focusRight = true
+	return m, waitForStats(m.statsGen, ch)
+}
+
+func (m Model) View() string {
+	if m.width == 0 || m.height == 0 {
+		return "loading bosun..."
+	}
+	if m.err != nil {
+		return panel("Error", "cannot reach docker:\n\n"+m.err.Error(), m.width, m.height-1, true) +
+			"\n" + hintStyle.Render(" q quit")
+	}
+	if m.helpOpen {
+		return m.helpOverlay()
 	}
 
-	var b strings.Builder
-	b.WriteString(headerStyle.Render("CONTAINERS") + "\n\n")
-	if len(m.containers) == 0 {
-		b.WriteString(hintStyle.Render("no containers") + "\n")
-	}
-	for i, ct := range m.containers {
-		style := stoppedStyle
-		switch ct.State {
-		case "running":
-			style = runningStyle
-		case "exited", "dead":
-			if strings.HasPrefix(ct.Status, "Exited (0)") {
-				style = stoppedStyle
-			} else {
-				style = erroredStyle
-			}
-		}
-		row := fmt.Sprintf("%-24s  %s", ct.Name, ct.Status)
-		if i == m.cursor {
-			b.WriteString(fmt.Sprintf("%s %s\n", style.Render("●"), selectedStyle.Render(row)))
-		} else {
-			b.WriteString(fmt.Sprintf("%s %s\n", style.Render("●"), row))
-		}
-	}
-	b.WriteString("\n")
-	if m.confirming {
-		b.WriteString(erroredStyle.Render(fmt.Sprintf("remove %s? (y/n)", m.pendingName)) + "\n")
-	} else if m.status != "" {
-		b.WriteString(hintStyle.Render(m.status) + "\n")
-	}
-	b.WriteString(hintStyle.Render("↑/↓ move · enter logs · S stats · e shell · s/x/r/d actions · ? help · q quit") + "\n")
-	return b.String()
+	leftW, rightW, panelH := m.dims()
+	left := panel("Containers", m.listBody(), leftW, panelH, !m.focusRight)
+	right := panel(m.rightTitle(), m.rightBody(), rightW, panelH, m.focusRight)
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, right) + "\n" + m.bottomBar()
 }

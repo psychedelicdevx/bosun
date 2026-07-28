@@ -32,39 +32,6 @@ func (m *Model) stopStats() {
 	}
 }
 
-func (m Model) updateStats(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "q", "ctrl+c":
-		m.stopStats()
-		return m, tea.Quit
-	case "esc":
-		m.stopStats()
-		m.mode = modeList
-		return m, nil
-	}
-	return m, nil
-}
-
-func (m Model) statsView() string {
-	name := ""
-	if m.cursor < len(m.containers) {
-		name = m.containers[m.cursor].Name
-	}
-
-	body := "waiting for samples..."
-	if m.haveStats {
-		body = fmt.Sprintf(
-			"CPU   %6.2f%%\nMEM   %6.2f%%   %s / %s",
-			m.stats.CPUPercent, m.stats.MemPercent,
-			humanBytes(m.stats.MemUsage), humanBytes(m.stats.MemLimit),
-		)
-	}
-
-	return headerStyle.Render("STATS: "+name) + "\n\n" +
-		body + "\n\n" +
-		hintStyle.Render("esc back · q quit")
-}
-
 func humanBytes(b uint64) string {
 	const unit = 1024
 	if b < unit {
