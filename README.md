@@ -37,6 +37,8 @@ bosun
 
 It connects to your local daemon through the usual socket (it respects `DOCKER_HOST` if you set it), lists every container, and hands you the keyboard. The list on the left is what you navigate. The panel on the right shows details, and switches to logs or stats when you ask for them. Whichever panel has focus gets a green border, same idea as lazygit.
 
+If you run Compose stacks, the list groups containers by project so you can see each stack together and collapse the ones you are not touching right now. Containers that are not part of a project sit in their own group at the bottom.
+
 If the daemon is down or the socket is not readable, bosun tells you in plain language instead of dumping a stack trace.
 
 Want to try it without touching your real containers? Run `bosun --demo` for a self-contained sandbox with fake containers, logs, and stats. Handy for screenshots and for kicking the tires.
@@ -47,6 +49,7 @@ Want to try it without touching your real containers? Run `bosun --demo` for a s
 | --- | --- |
 | `↑` `↓` or `k` `j` | move through the list |
 | `/` | filter the list by name |
+| `space` | collapse or expand a compose group |
 | `tab` | switch focus between the two panels |
 | `enter` | stream logs for the selected container |
 | `S` | live CPU and memory |
