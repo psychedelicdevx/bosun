@@ -15,13 +15,15 @@ var (
 	runningStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
 	stoppedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	erroredStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	headerStyle  = lipgloss.NewStyle().Bold(true)
-	hintStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	headerStyle   = lipgloss.NewStyle().Bold(true)
+	hintStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("236"))
 )
 
 type Model struct {
 	client     *docker.Client
 	containers []docker.Container
+	cursor     int
 	loaded     bool
 	err        error
 }
@@ -51,6 +53,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case containersMsg:
 		m.containers = msg
 		m.loaded = true
+		if m.cursor > len(m.containers)-1 {
+			m.cursor = max(0, len(m.containers)-1)
+		}
 	case errMsg:
 		m.err = msg.err
 		m.loaded = true
@@ -58,6 +63,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "down", "j":
+			if m.cursor < len(m.containers)-1 {
+				m.cursor++
+			}
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
 		}
 	}
 	return m, nil
@@ -76,7 +89,7 @@ func (m Model) View() string {
 	if len(m.containers) == 0 {
 		b.WriteString(hintStyle.Render("no containers") + "\n")
 	}
-	for _, ct := range m.containers {
+	for i, ct := range m.containers {
 		style := stoppedStyle
 		switch ct.State {
 		case "running":
@@ -84,8 +97,13 @@ func (m Model) View() string {
 		case "exited", "dead":
 			style = erroredStyle
 		}
-		b.WriteString(fmt.Sprintf("%s  %-24s  %s\n", style.Render("●"), ct.Name, ct.Status))
+		row := fmt.Sprintf("%-24s  %s", ct.Name, ct.Status)
+		if i == m.cursor {
+			b.WriteString(fmt.Sprintf("%s %s\n", style.Render("●"), selectedStyle.Render(row)))
+		} else {
+			b.WriteString(fmt.Sprintf("%s %s\n", style.Render("●"), row))
+		}
 	}
-	b.WriteString("\n" + hintStyle.Render("q quit") + "\n")
+	b.WriteString("\n" + hintStyle.Render("↑/↓ move · q quit") + "\n")
 	return b.String()
 }
