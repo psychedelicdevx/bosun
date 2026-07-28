@@ -10,7 +10,7 @@ Set Theme "Catppuccin Mocha"
 Hide
 Type "go build -o bosun ./cmd" Enter
 Sleep 2s
-Type "./bosun" Enter
+Type "./bosun --demo" Enter
 Sleep 2s
 Show
 

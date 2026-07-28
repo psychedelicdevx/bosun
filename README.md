@@ -41,6 +41,8 @@ It connects to your local daemon through the usual socket (it respects `DOCKER_H
 
 If the daemon is down or the socket is not readable, bosun tells you in plain language instead of dumping a stack trace.
 
+Want to try it without touching your real containers? Run `bosun --demo` for a self-contained sandbox with fake containers, logs, and stats. Handy for screenshots and for kicking the tires.
+
 ## Keys
 
 | Key | What it does |
