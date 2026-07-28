@@ -104,3 +104,26 @@ func TestFilterMatchesAndSelects(t *testing.T) {
 		t.Fatalf("esc should clear filter, got filtering=%v filter=%q visible=%d", m.filtering, m.filter, len(m.visible()))
 	}
 }
+
+func TestComposeGroupingCollapse(t *testing.T) {
+	m := New(nil)
+	m = send(m, containersMsg{
+		{Name: "shop-web", ID: "1", Project: "shop"},
+		{Name: "shop-db", ID: "2", Project: "shop"},
+		{Name: "mailpit", ID: "3"},
+	})
+
+	// rows: header(shop), shop-web, shop-db, header(standalone), mailpit
+	if got := len(m.rows()); got != 5 {
+		t.Fatalf("want 5 rows, got %d", got)
+	}
+	if r, _ := m.currentRow(); !r.header || r.project != "shop" {
+		t.Fatalf("cursor 0 should be shop header, got %+v", r)
+	}
+
+	// collapse shop (cursor on its header)
+	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if got := len(m.rows()); got != 3 {
+		t.Fatalf("collapsed shop: want 3 rows, got %d", got)
+	}
+}

@@ -85,23 +85,37 @@ func (m Model) listBody() string {
 	if !m.loaded {
 		return "loading..."
 	}
-	vis := m.visible()
-	if len(vis) == 0 {
+	rs := m.rows()
+	if len(rs) == 0 {
 		if m.filter != "" || m.filtering {
 			return hintStyle.Render("no match")
 		}
 		return hintStyle.Render("no containers")
 	}
 	var b strings.Builder
-	for i, ct := range vis {
-		name := ct.Name
-		cur := "  "
-		if i == m.cursor {
-			cur = borderActiveStyle.Render("› ")
-			name = selectedStyle.Render(name)
+	for i, r := range rs {
+		if r.header {
+			chevron := "▼"
+			if m.collapsed[r.project] {
+				chevron = "▶"
+			}
+			line := chevron + " " + r.project
+			if i == m.cursor {
+				line = selectedStyle.Render(line)
+			} else {
+				line = headerStyle.Render(line)
+			}
+			b.WriteString(line)
+		} else {
+			name := r.ct.Name
+			cur := "  "
+			if i == m.cursor {
+				cur = borderActiveStyle.Render("› ")
+				name = selectedStyle.Render(name)
+			}
+			b.WriteString("  " + cur + stateStyle(r.ct).Render("●") + " " + name)
 		}
-		b.WriteString(cur + stateStyle(ct).Render("●") + " " + name)
-		if i < len(vis)-1 {
+		if i < len(rs)-1 {
 			b.WriteString("\n")
 		}
 	}
@@ -153,12 +167,37 @@ func (m Model) rightBody() string {
 	case viewStats:
 		return m.statsBody()
 	default:
+		if r, ok := m.currentRow(); ok && r.header {
+			return m.projectSummary(r.project)
+		}
 		ct, ok := m.selected()
 		if !ok {
 			return hintStyle.Render("no container selected")
 		}
 		return detailsBody(ct)
 	}
+}
+
+func (m Model) projectSummary(project string) string {
+	total, running := 0, 0
+	for _, c := range m.containers {
+		p := c.Project
+		if p == "" {
+			p = standaloneKey
+		}
+		if p == project {
+			total++
+			if c.State == "running" {
+				running++
+			}
+		}
+	}
+	return fmt.Sprintf(
+		"%s %s\n\n%s  %d\n%s  %d",
+		headerStyle.Render(project), labelStyle.Render("(project)"),
+		labelStyle.Render("containers"), total,
+		labelStyle.Render("running   "), running,
+	)
 }
 
 func (m Model) bottomBar() string {

@@ -8,11 +8,12 @@ import (
 )
 
 type Container struct {
-	ID     string
-	Name   string
-	Image  string
-	State  string
-	Status string
+	ID      string
+	Name    string
+	Image   string
+	State   string
+	Status  string
+	Project string
 }
 
 func (c *Client) List(ctx context.Context) ([]Container, error) {
@@ -32,11 +33,12 @@ func (c *Client) List(ctx context.Context) ([]Container, error) {
 			id = id[:12]
 		}
 		out = append(out, Container{
-			ID:     id,
-			Name:   name,
-			Image:  ct.Image,
-			State:  ct.State,
-			Status: ct.Status,
+			ID:      id,
+			Name:    name,
+			Image:   ct.Image,
+			State:   ct.State,
+			Status:  ct.Status,
+			Project: ct.Labels["com.docker.compose.project"],
 		})
 	}
 	return out, nil

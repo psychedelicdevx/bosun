@@ -63,14 +63,17 @@ type Model struct {
 	filter    string
 	filtering bool
 
+	collapsed map[string]bool
+
 	width  int
 	height int
 }
 
 func New(client Engine) Model {
 	return Model{
-		client: client,
-		vp:     viewport.New(80, 20),
+		client:    client,
+		vp:        viewport.New(80, 20),
+		collapsed: map[string]bool{},
 	}
 }
 
@@ -115,15 +118,15 @@ func (m Model) visible() []docker.Container {
 }
 
 func (m Model) selected() (docker.Container, bool) {
-	v := m.visible()
-	if m.cursor < 0 || m.cursor >= len(v) {
+	r, ok := m.currentRow()
+	if !ok || r.header {
 		return docker.Container{}, false
 	}
-	return v[m.cursor], true
+	return r.ct, true
 }
 
 func (m *Model) clampCursor() {
-	n := len(m.visible())
+	n := len(m.rows())
 	if m.cursor > n-1 {
 		m.cursor = max(0, n-1)
 	}
@@ -259,7 +262,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch msg.String() {
 	case "down", "j":
-		if m.cursor < len(m.visible())-1 {
+		if m.cursor < len(m.rows())-1 {
 			m.toDetails()
 			m.cursor++
 		}
@@ -268,7 +271,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.toDetails()
 			m.cursor--
 		}
+	case " ":
+		if r, ok := m.currentRow(); ok && r.header {
+			m.collapsed[r.project] = !m.collapsed[r.project]
+			m.clampCursor()
+		}
 	case "enter":
+		if r, ok := m.currentRow(); ok && r.header {
+			m.collapsed[r.project] = !m.collapsed[r.project]
+			m.clampCursor()
+			return m, nil
+		}
 		return m.openLogs()
 	case "S":
 		return m.openStats()
