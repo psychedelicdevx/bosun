@@ -80,7 +80,7 @@ Press `T` to cycle color themes while running, or pick one at launch:
 bosun --theme dracula
 ```
 
-Built in themes: `default`, `dracula`, `nord`, `gruvbox`, `mono`. Run `bosun --themes` to list them, or set `BOSUN_THEME` in your shell to make one stick.
+Built in themes: `default`, `catppuccin`, `dracula`, `tokyonight`, `nord`, `gruvbox`, `rosepine`, `solarized`, `monokai`, `mono`. Run `bosun --themes` to list them, or set `BOSUN_THEME` in your shell to make one stick.
 
 ## How it works
 
