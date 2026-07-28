@@ -4,8 +4,6 @@ A terminal UI for Docker that stays out of your way. Bordered panels, one-key ac
 
 ![bosun in action](docs/demo.gif)
 
-> Drop a `demo.gif` in `docs/` and this shows up at the top. Until then, imagine arrow keys, a list on the left, logs scrolling on the right.
-
 ## Why
 
 I spend half my day in `docker ps`, `docker logs -f`, `docker exec`, over and over. The web dashboards are heavy and the CLI makes me retype the same three commands. bosun keeps everything one keypress away and never leaves the terminal.
