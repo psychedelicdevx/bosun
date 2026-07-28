@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -18,6 +19,14 @@ func main() {
 		fmt.Println("bosun", version)
 		return
 	}
+	if hasFlag("--themes") {
+		for _, n := range ui.ThemeNames {
+			fmt.Println(n)
+		}
+		return
+	}
+
+	ui.ApplyTheme(flagValue("--theme", os.Getenv("BOSUN_THEME")))
 
 	var engine ui.Engine
 	if hasFlag("--demo") || os.Getenv("BOSUN_DEMO") != "" {
@@ -45,4 +54,17 @@ func hasFlag(f string) bool {
 		}
 	}
 	return false
+}
+
+func flagValue(name, def string) string {
+	args := os.Args[1:]
+	for i, a := range args {
+		if a == name && i+1 < len(args) {
+			return args[i+1]
+		}
+		if strings.HasPrefix(a, name+"=") {
+			return strings.TrimPrefix(a, name+"=")
+		}
+	}
+	return def
 }
