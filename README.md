@@ -72,6 +72,16 @@ Want to try it without touching your real containers? Run `bosun --demo` for a s
 
 Logs follow along at the bottom while new lines arrive. Scroll up and it stops chasing so you can read, then it picks back up once you return to the bottom. The list refreshes itself every couple of seconds, so anything you change from another terminal shows up on its own.
 
+## Themes
+
+Press `T` to cycle color themes while running, or pick one at launch:
+
+```bash
+bosun --theme dracula
+```
+
+Built in themes: `default`, `dracula`, `nord`, `gruvbox`, `mono`. Run `bosun --themes` to list them, or set `BOSUN_THEME` in your shell to make one stick.
+
 ## How it works
 
 The whole thing is one static binary. Under the hood:
