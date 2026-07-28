@@ -305,12 +305,16 @@ func (m Model) View() string {
 		return panel("Error", "cannot reach docker:\n\n"+m.err.Error(), m.width, m.height-1, true) +
 			"\n" + hintStyle.Render(" q quit")
 	}
-	if m.helpOpen {
-		return m.helpOverlay()
-	}
-
 	leftW, rightW, panelH := m.dims()
-	left := panel("Containers", m.listBody(), leftW, panelH, !m.focusRight)
-	right := panel(m.rightTitle(), m.rightBody(), rightW, panelH, m.focusRight)
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, right) + "\n" + m.bottomBar()
+	left := panel("Containers", m.listBody(), leftW, panelH, !m.focusRight && !m.helpOpen)
+	right := panel(m.rightTitle(), m.rightBody(), rightW, panelH, m.focusRight && !m.helpOpen)
+	view := lipgloss.JoinHorizontal(lipgloss.Top, left, right) + "\n" + m.bottomBar()
+
+	if m.helpOpen {
+		box := m.helpBox()
+		x := max(0, (m.width-lipgloss.Width(box))/2)
+		y := max(0, (m.height-lipgloss.Height(box))/2)
+		view = overlay(view, box, x, y)
+	}
+	return view
 }

@@ -1,12 +1,8 @@
 package ui
 
-import (
-	"strings"
+import "strings"
 
-	"github.com/charmbracelet/lipgloss"
-)
-
-func (m Model) helpOverlay() string {
+func (m Model) helpBox() string {
 	rows := [][2]string{
 		{"↑ / ↓", "move selection (also j / k)"},
 		{"tab", "switch focus between panels"},
@@ -18,20 +14,17 @@ func (m Model) helpOverlay() string {
 		{"r", "restart container"},
 		{"d", "remove container (asks to confirm)"},
 		{"esc", "back to details"},
-		{"?", "toggle this help"},
+		{"?", "close this help"},
 		{"q", "quit"},
 	}
 
 	var b strings.Builder
-	for i, r := range rows {
-		b.WriteString(headerStyle.Render(pad(r[0], 8)) + labelStyle.Render(r[1]))
-		if i < len(rows)-1 {
-			b.WriteString("\n")
-		}
+	b.WriteString("\n")
+	for _, r := range rows {
+		b.WriteString("  " + headerStyle.Render(pad(r[0], 10)) + labelStyle.Render(r[1]) + "\n")
 	}
 
-	box := panel("Keybindings", b.String(), 44, len(rows)+2, true)
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+	return panel("Keybindings", strings.TrimRight(b.String(), "\n"), 54, len(rows)+4, true)
 }
 
 func pad(s string, w int) string {
