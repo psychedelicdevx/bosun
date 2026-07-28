@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -12,9 +13,9 @@ import (
 )
 
 var (
-	runningStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	stoppedStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	erroredStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
+	runningStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	stoppedStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	erroredStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
 	headerStyle   = lipgloss.NewStyle().Bold(true)
 	hintStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("236"))
@@ -26,10 +27,23 @@ type Model struct {
 	cursor     int
 	loaded     bool
 	err        error
+
+	mode      mode
+	vp        viewport.Model
+	logLines  []string
+	logChan   <-chan string
+	logCancel context.CancelFunc
+	logGen    int
+
+	width  int
+	height int
 }
 
 func New(client *docker.Client) Model {
-	return Model{client: client}
+	return Model{
+		client: client,
+		vp:     viewport.New(80, 20),
+	}
 }
 
 type containersMsg []docker.Container
@@ -50,33 +64,86 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width, m.height = msg.Width, msg.Height
+		m.vp.Width = msg.Width
+		m.vp.Height = max(1, msg.Height-3)
+		return m, nil
 	case containersMsg:
 		m.containers = msg
 		m.loaded = true
 		if m.cursor > len(m.containers)-1 {
 			m.cursor = max(0, len(m.containers)-1)
 		}
+		return m, nil
 	case errMsg:
 		m.err = msg.err
 		m.loaded = true
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
-			return m, tea.Quit
-		case "down", "j":
-			if m.cursor < len(m.containers)-1 {
-				m.cursor++
-			}
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
+		return m, nil
+	case logLineMsg:
+		if msg.gen != m.logGen {
+			return m, nil
 		}
+		m.logLines = append(m.logLines, msg.line)
+		m.vp.SetContent(strings.Join(m.logLines, "\n"))
+		m.vp.GotoBottom()
+		return m, waitForLog(m.logGen, m.logChan)
+	case logClosedMsg:
+		return m, nil
+	case tea.KeyMsg:
+		if m.mode == modeLogs {
+			return m.updateLogs(msg)
+		}
+		return m.updateList(msg)
+	}
+	return m, nil
+}
+
+func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		return m, tea.Quit
+	case "down", "j":
+		if m.cursor < len(m.containers)-1 {
+			m.cursor++
+		}
+	case "up", "k":
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case "enter":
+		if len(m.containers) == 0 {
+			return m, nil
+		}
+		m.logGen++
+		ctx, cancel := context.WithCancel(context.Background())
+		ch, err := m.client.Logs(ctx, m.containers[m.cursor].ID)
+		if err != nil {
+			cancel()
+			m.logLines = []string{"error opening logs: " + err.Error()}
+			m.vp.SetContent(m.logLines[0])
+			m.mode = modeLogs
+			return m, nil
+		}
+		m.logCancel = cancel
+		m.logChan = ch
+		m.logLines = nil
+		m.vp.SetContent("")
+		m.vp.GotoTop()
+		m.mode = modeLogs
+		return m, waitForLog(m.logGen, ch)
 	}
 	return m, nil
 }
 
 func (m Model) View() string {
+	if m.mode == modeLogs {
+		return m.logsView()
+	}
+	return m.listView()
+}
+
+func (m Model) listView() string {
 	if m.err != nil {
 		return fmt.Sprintf("cannot reach docker: %v\n\n%s\n", m.err, hintStyle.Render("q quit"))
 	}
@@ -104,6 +171,6 @@ func (m Model) View() string {
 			b.WriteString(fmt.Sprintf("%s %s\n", style.Render("●"), row))
 		}
 	}
-	b.WriteString("\n" + hintStyle.Render("↑/↓ move · q quit") + "\n")
+	b.WriteString("\n" + hintStyle.Render("↑/↓ move · enter logs · q quit") + "\n")
 	return b.String()
 }

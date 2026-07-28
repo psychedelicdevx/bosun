@@ -44,3 +44,19 @@ func TestCursorStaysInBounds(t *testing.T) {
 		t.Fatalf("reclamp after shrink: want 0, got %d", m.cursor)
 	}
 }
+
+func TestStaleLogLinesIgnored(t *testing.T) {
+	m := New(nil)
+	m.mode = modeLogs
+	m.logGen = 2
+
+	m = send(m, logLineMsg{gen: 1, line: "old stream"})
+	if len(m.logLines) != 0 {
+		t.Fatalf("stale gen should be ignored, got %v", m.logLines)
+	}
+
+	m = send(m, logLineMsg{gen: 2, line: "current"})
+	if len(m.logLines) != 1 || m.logLines[0] != "current" {
+		t.Fatalf("current gen should append, got %v", m.logLines)
+	}
+}
