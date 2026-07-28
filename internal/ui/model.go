@@ -35,6 +35,11 @@ type Model struct {
 	logCancel context.CancelFunc
 	logGen    int
 
+	status      string
+	confirming  bool
+	pendingID   string
+	pendingName string
+
 	width  int
 	height int
 }
@@ -90,6 +95,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, waitForLog(m.logGen, m.logChan)
 	case logClosedMsg:
 		return m, nil
+	case actionDoneMsg:
+		m.status = actionStatus(msg)
+		return m, m.fetch
 	case tea.KeyMsg:
 		if m.mode == modeLogs {
 			return m.updateLogs(msg)
@@ -100,6 +108,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.confirming {
+		switch msg.String() {
+		case "y", "enter":
+			m.confirming = false
+			m.status = "removing " + m.pendingName + "..."
+			return m, m.doAction("remove", m.pendingID, m.pendingName)
+		default:
+			m.confirming = false
+			m.status = "cancelled"
+			return m, nil
+		}
+	}
+
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
@@ -132,6 +153,23 @@ func (m Model) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.vp.GotoTop()
 		m.mode = modeLogs
 		return m, waitForLog(m.logGen, ch)
+	case "s", "x", "r":
+		if len(m.containers) == 0 {
+			return m, nil
+		}
+		ct := m.containers[m.cursor]
+		verb := map[string]string{"s": "start", "x": "stop", "r": "restart"}[msg.String()]
+		m.status = verb + "ing " + ct.Name + "..."
+		return m, m.doAction(verb, ct.ID, ct.Name)
+	case "d":
+		if len(m.containers) == 0 {
+			return m, nil
+		}
+		ct := m.containers[m.cursor]
+		m.confirming = true
+		m.pendingID = ct.ID
+		m.pendingName = ct.Name
+		return m, nil
 	}
 	return m, nil
 }
@@ -171,6 +209,12 @@ func (m Model) listView() string {
 			b.WriteString(fmt.Sprintf("%s %s\n", style.Render("●"), row))
 		}
 	}
-	b.WriteString("\n" + hintStyle.Render("↑/↓ move · enter logs · q quit") + "\n")
+	b.WriteString("\n")
+	if m.confirming {
+		b.WriteString(erroredStyle.Render(fmt.Sprintf("remove %s? (y/n)", m.pendingName)) + "\n")
+	} else if m.status != "" {
+		b.WriteString(hintStyle.Render(m.status) + "\n")
+	}
+	b.WriteString(hintStyle.Render("↑/↓ move · enter logs · s start · x stop · r restart · d remove · q quit") + "\n")
 	return b.String()
 }

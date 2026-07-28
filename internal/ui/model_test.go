@@ -60,3 +60,18 @@ func TestStaleLogLinesIgnored(t *testing.T) {
 		t.Fatalf("current gen should append, got %v", m.logLines)
 	}
 }
+
+func TestRemoveNeedsConfirm(t *testing.T) {
+	m := New(nil)
+	m = send(m, containersMsg{{Name: "web", ID: "abc"}})
+
+	m = send(m, key("d"))
+	if !m.confirming || m.pendingName != "web" {
+		t.Fatalf("d should arm confirm for web, got confirming=%v name=%q", m.confirming, m.pendingName)
+	}
+
+	m = send(m, key("n"))
+	if m.confirming || m.status != "cancelled" {
+		t.Fatalf("n should cancel, got confirming=%v status=%q", m.confirming, m.status)
+	}
+}
