@@ -11,9 +11,16 @@ import (
 	"github.com/psychedelicdevx/bosun/internal/ui"
 )
 
+var version = "dev"
+
 func main() {
+	if hasFlag("--version") || hasFlag("-v") {
+		fmt.Println("bosun", version)
+		return
+	}
+
 	var engine ui.Engine
-	if demoMode() {
+	if hasFlag("--demo") || os.Getenv("BOSUN_DEMO") != "" {
 		engine = demo.New()
 	} else {
 		client, err := docker.New()
@@ -31,12 +38,9 @@ func main() {
 	}
 }
 
-func demoMode() bool {
-	if os.Getenv("BOSUN_DEMO") != "" {
-		return true
-	}
+func hasFlag(f string) bool {
 	for _, a := range os.Args[1:] {
-		if a == "--demo" {
+		if a == f {
 			return true
 		}
 	}
