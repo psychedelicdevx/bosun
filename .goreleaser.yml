@@ -19,11 +19,25 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w
+      - -s -w -X main.version={{ .Version }}
 
 archives:
   - id: bosun
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+brews:
+  - name: bosun
+    repository:
+      owner: psychedelicdevx
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://github.com/psychedelicdevx/bosun"
+    description: "A fast, clean terminal UI for managing Docker containers"
+    license: MIT
+    install: |
+      bin.install "bosun"
+    test: |
+      system "#{bin}/bosun", "--version"
 
 checksum:
   name_template: checksums.txt
