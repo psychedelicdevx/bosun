@@ -32,7 +32,7 @@ const (
 )
 
 type Model struct {
-	client     *docker.Client
+	client     Engine
 	containers []docker.Container
 	cursor     int
 	loaded     bool
@@ -64,7 +64,7 @@ type Model struct {
 	height int
 }
 
-func New(client *docker.Client) Model {
+func New(client Engine) Model {
 	return Model{
 		client: client,
 		vp:     viewport.New(80, 20),
