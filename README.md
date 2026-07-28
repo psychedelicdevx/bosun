@@ -12,13 +12,21 @@ It is not trying to replace Docker Desktop. It is a fast keyboard cockpit for th
 
 ## Install
 
-You need Go 1.24 or newer and a running Docker daemon.
+You need a running Docker daemon. That is it for the Homebrew route.
+
+Homebrew:
+
+```bash
+brew install psychedelicdevx/tap/bosun
+```
+
+With Go (1.24 or newer):
 
 ```bash
 go install github.com/psychedelicdevx/bosun/cmd@latest
 ```
 
-Prefer to build it yourself:
+Or build it yourself:
 
 ```bash
 git clone https://github.com/psychedelicdevx/bosun.git
