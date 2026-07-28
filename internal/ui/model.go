@@ -19,7 +19,7 @@ var (
 	headerStyle       = lipgloss.NewStyle().Bold(true)
 	hintStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 	labelStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	selectedStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
+	selRowStyle       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("252")).Background(lipgloss.Color("237"))
 	borderActiveStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
 )
 
@@ -392,7 +392,7 @@ func (m Model) View() string {
 			"\n" + hintStyle.Render(" q quit")
 	}
 	leftW, rightW, panelH := m.dims()
-	left := panel(m.listTitle(), m.listBody(), leftW, panelH, !m.focusRight && !m.helpOpen)
+	left := panel(m.listTitle(), m.listBody(leftW-2), leftW, panelH, !m.focusRight && !m.helpOpen)
 	right := panel(m.rightTitle(), m.rightBody(), rightW, panelH, m.focusRight && !m.helpOpen)
 	view := lipgloss.JoinHorizontal(lipgloss.Top, left, right) + "\n" + m.bottomBar()
 

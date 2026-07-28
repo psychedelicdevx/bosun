@@ -81,7 +81,7 @@ func (m Model) listTitle() string {
 	return "Containers"
 }
 
-func (m Model) listBody() string {
+func (m Model) listBody(inner int) string {
 	if !m.loaded {
 		return "loading..."
 	}
@@ -94,34 +94,39 @@ func (m Model) listBody() string {
 	}
 	var b strings.Builder
 	for i, r := range rs {
-		marker := "  "
 		if i == m.cursor {
-			marker = borderActiveStyle.Render("› ")
-		}
-		if r.header {
+			b.WriteString(highlightRow(r, m.collapsed[r.project], inner))
+		} else if r.header {
 			chevron := "▼"
 			if m.collapsed[r.project] {
 				chevron = "▶"
 			}
-			label := chevron + " " + r.project
-			if i == m.cursor {
-				label = selectedStyle.Render(label)
-			} else {
-				label = headerStyle.Render(label)
-			}
-			b.WriteString(marker + label)
+			b.WriteString(headerStyle.Render(chevron + " " + r.project))
 		} else {
-			name := r.ct.Name
-			if i == m.cursor {
-				name = selectedStyle.Render(name)
-			}
-			b.WriteString(marker + "  " + stateStyle(r.ct).Render("●") + " " + name)
+			b.WriteString("    " + stateStyle(r.ct).Render("●") + " " + r.ct.Name)
 		}
 		if i < len(rs)-1 {
 			b.WriteString("\n")
 		}
 	}
 	return b.String()
+}
+
+func highlightRow(r row, collapsed bool, inner int) string {
+	var plain string
+	if r.header {
+		chevron := "▼"
+		if collapsed {
+			chevron = "▶"
+		}
+		plain = chevron + " " + r.project
+	} else {
+		plain = "    ● " + r.ct.Name
+	}
+	if pad := inner - lipgloss.Width(plain); pad > 0 {
+		plain += strings.Repeat(" ", pad)
+	}
+	return selRowStyle.Render(plain)
 }
 
 func detailsBody(ct docker.Container) string {
