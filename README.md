@@ -46,6 +46,7 @@ Want to try it without touching your real containers? Run `bosun --demo` for a s
 | Key | What it does |
 | --- | --- |
 | `↑` `↓` or `k` `j` | move through the list |
+| `/` | filter the list by name |
 | `tab` | switch focus between the two panels |
 | `enter` | stream logs for the selected container |
 | `S` | live CPU and memory |
