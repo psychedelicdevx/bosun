@@ -20,6 +20,11 @@ const (
 	viewStats
 )
 
+const (
+	logBufferMax   = 5000
+	logBufferSlack = 1000
+)
+
 type Model struct {
 	client     Engine
 	containers []docker.Container
@@ -168,6 +173,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		atBottom := m.vp.AtBottom()
 		m.logLines = append(m.logLines, msg.line)
+		if len(m.logLines) > logBufferMax+logBufferSlack {
+			m.logLines = append([]string(nil), m.logLines[len(m.logLines)-logBufferMax:]...)
+		}
 		m.vp.SetContent(strings.Join(m.logLines, "\n"))
 		if atBottom {
 			m.vp.GotoBottom()

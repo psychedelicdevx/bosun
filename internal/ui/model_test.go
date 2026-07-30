@@ -105,6 +105,19 @@ func TestFilterMatchesAndSelects(t *testing.T) {
 	}
 }
 
+func TestLogBufferCapped(t *testing.T) {
+	m := New(nil)
+	for i := 0; i < logBufferMax+logBufferSlack+2000; i++ {
+		m = send(m, logLineMsg{gen: 0, line: "line"})
+	}
+	if len(m.logLines) > logBufferMax+logBufferSlack {
+		t.Fatalf("log buffer unbounded: got %d, want <= %d", len(m.logLines), logBufferMax+logBufferSlack)
+	}
+	if len(m.logLines) < logBufferMax {
+		t.Fatalf("log buffer trimmed too aggressively: got %d", len(m.logLines))
+	}
+}
+
 func TestComposeGroupingCollapse(t *testing.T) {
 	m := New(nil)
 	m = send(m, containersMsg{
