@@ -47,6 +47,8 @@ It connects to your local daemon through the usual socket (it respects `DOCKER_H
 
 If you run Compose stacks, the list groups containers by project so you can see each stack together and collapse the ones you are not touching right now. Containers that are not part of a project sit in their own group at the bottom.
 
+Press `1` and `2` to switch between the containers view and an images view, where you can see every image with its size, remove ones you do not need, and prune the dangling `<none>` images that pile up after rebuilds.
+
 If the daemon is down or the socket is not readable, bosun tells you in plain language instead of dumping a stack trace.
 
 Want to try it without touching your real containers? Run `bosun --demo` for a self-contained sandbox with fake containers, logs, and stats. Handy for screenshots and for kicking the tires.
@@ -56,6 +58,7 @@ Want to try it without touching your real containers? Run `bosun --demo` for a s
 | Key | What it does |
 | --- | --- |
 | `↑` `↓` or `k` `j` | move through the list |
+| `1` / `2` | switch between containers and images |
 | `/` | filter the list by name |
 | `space` | collapse or expand a compose group |
 | `tab` | switch focus between the two panels |
@@ -65,7 +68,8 @@ Want to try it without touching your real containers? Run `bosun --demo` for a s
 | `s` | start |
 | `x` | stop |
 | `r` | restart |
-| `d` | remove, and it asks first |
+| `d` | remove container or image, asks first |
+| `p` | prune dangling images (images view) |
 | `esc` | back to the details view |
 | `?` | show the keybindings |
 | `q` | quit |
