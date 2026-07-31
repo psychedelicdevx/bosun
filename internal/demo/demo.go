@@ -13,25 +13,71 @@ import (
 type Engine struct {
 	mu         sync.Mutex
 	containers []docker.Container
+	images     []docker.Image
 }
 
 func New() *Engine {
-	return &Engine{containers: []docker.Container{
-		{ID: "a1b2c3d4e5f6", Name: "shop-web", Image: "nginx:1.27", State: "running", Status: "Up 3 days", Project: "shop"},
-		{ID: "b2c3d4e5f6a1", Name: "shop-api", Image: "ghcr.io/acme/api:latest", State: "running", Status: "Up 3 days (healthy)", Project: "shop"},
-		{ID: "c3d4e5f6a1b2", Name: "shop-postgres", Image: "postgres:16", State: "running", Status: "Up 3 days", Project: "shop"},
-		{ID: "0a1b2c3d4e5f", Name: "shop-migrate", Image: "ghcr.io/acme/migrate:1.4", State: "exited", Status: "Exited (0) 3 days ago", Project: "shop"},
-		{ID: "d4e5f6a1b2c3", Name: "blog-web", Image: "ghost:5", State: "running", Status: "Up 5 days", Project: "blog"},
-		{ID: "e5f6a1b2c3d4", Name: "blog-db", Image: "mysql:8", State: "running", Status: "Up 5 days", Project: "blog"},
-		{ID: "f6a1b2c3d4e5", Name: "mailpit", Image: "axllent/mailpit", State: "running", Status: "Up 3 days"},
-		{ID: "1b2c3d4e5f60", Name: "registry", Image: "registry:2", State: "exited", Status: "Exited (143) 1 week ago"},
-	}}
+	return &Engine{
+		images: []docker.Image{
+			{ID: "a1f2e3d4c5b6", Repo: "nginx:1.27", Size: 187_000_000, Created: 1750000000},
+			{ID: "b2e3d4c5b6a1", Repo: "postgres:16", Size: 431_000_000, Created: 1749000000},
+			{ID: "c3d4c5b6a1e2", Repo: "ghcr.io/acme/api:latest", Size: 92_000_000, Created: 1751000000},
+			{ID: "d4c5b6a1e2f3", Repo: "redis:7", Size: 41_000_000, Created: 1748000000},
+			{ID: "e5b6a1e2f3d4", Repo: "ghost:5", Size: 612_000_000, Created: 1747000000},
+			{ID: "f6a1e2f3d4c5", Repo: "<none>:<none>", Size: 88_000_000, Created: 1746000000, Dangling: true},
+			{ID: "0a1e2f3d4c5b", Repo: "<none>:<none>", Size: 205_000_000, Created: 1745000000, Dangling: true},
+		},
+		containers: []docker.Container{
+			{ID: "a1b2c3d4e5f6", Name: "shop-web", Image: "nginx:1.27", State: "running", Status: "Up 3 days", Project: "shop"},
+			{ID: "b2c3d4e5f6a1", Name: "shop-api", Image: "ghcr.io/acme/api:latest", State: "running", Status: "Up 3 days (healthy)", Project: "shop"},
+			{ID: "c3d4e5f6a1b2", Name: "shop-postgres", Image: "postgres:16", State: "running", Status: "Up 3 days", Project: "shop"},
+			{ID: "0a1b2c3d4e5f", Name: "shop-migrate", Image: "ghcr.io/acme/migrate:1.4", State: "exited", Status: "Exited (0) 3 days ago", Project: "shop"},
+			{ID: "d4e5f6a1b2c3", Name: "blog-web", Image: "ghost:5", State: "running", Status: "Up 5 days", Project: "blog"},
+			{ID: "e5f6a1b2c3d4", Name: "blog-db", Image: "mysql:8", State: "running", Status: "Up 5 days", Project: "blog"},
+			{ID: "f6a1b2c3d4e5", Name: "mailpit", Image: "axllent/mailpit", State: "running", Status: "Up 3 days"},
+			{ID: "1b2c3d4e5f60", Name: "registry", Image: "registry:2", State: "exited", Status: "Exited (143) 1 week ago"},
+		}}
 }
 
 func (e *Engine) List(ctx context.Context) ([]docker.Container, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return append([]docker.Container(nil), e.containers...), nil
+}
+
+func (e *Engine) Images(ctx context.Context) ([]docker.Image, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]docker.Image(nil), e.images...), nil
+}
+
+func (e *Engine) RemoveImage(ctx context.Context, id string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	out := e.images[:0]
+	for _, im := range e.images {
+		if im.ID != id {
+			out = append(out, im)
+		}
+	}
+	e.images = out
+	return nil
+}
+
+func (e *Engine) PruneImages(ctx context.Context) (uint64, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	var reclaimed uint64
+	out := e.images[:0]
+	for _, im := range e.images {
+		if im.Dangling {
+			reclaimed += uint64(im.Size)
+		} else {
+			out = append(out, im)
+		}
+	}
+	e.images = out
+	return reclaimed, nil
 }
 
 var demoLog = []string{
