@@ -48,11 +48,16 @@ type Model struct {
 	statsCancel context.CancelFunc
 	statsGen    int
 
-	status      string
-	statusGen   int
-	confirming  bool
-	pendingID   string
-	pendingName string
+	tab       tab
+	images    []docker.Image
+	imgCursor int
+
+	status       string
+	statusGen    int
+	confirming   bool
+	pendingImage bool
+	pendingID    string
+	pendingName  string
 
 	filter    string
 	filtering bool
@@ -140,7 +145,7 @@ func (m Model) fetch() tea.Msg {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.fetch, tick())
+	return tea.Batch(m.fetch, m.fetchImages, tick())
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -152,7 +157,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.vp.Height = max(1, panelH-2)
 		return m, nil
 	case tickMsg:
-		return m, tea.Batch(m.fetch, tick())
+		return m, tea.Batch(m.fetch, m.fetchImages, tick())
+	case imagesMsg:
+		m.images = msg
+		if m.imgCursor > len(m.images)-1 {
+			m.imgCursor = max(0, len(m.images)-1)
+		}
+		return m, nil
+	case imageDoneMsg:
+		if msg.err != nil {
+			return m, m.setStatus(msg.verb + " failed: " + msg.err.Error())
+		}
+		status := msg.verb + " " + msg.name
+		if msg.verb == "pruned" {
+			status = "pruned dangling images, freed " + humanBytes(msg.reclaimed)
+		}
+		return m, tea.Batch(m.setStatus(status), m.fetchImages)
 	case containersMsg:
 		m.containers = msg
 		m.loaded = true
@@ -214,9 +234,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "y", "enter":
 			m.confirming = false
+			if m.pendingImage {
+				m.pendingImage = false
+				return m, tea.Batch(m.setStatus("removing image "+m.pendingName+"..."), m.removeImage(m.pendingID, m.pendingName))
+			}
 			return m, tea.Batch(m.setStatus("removing "+m.pendingName+"..."), m.doAction("remove", m.pendingID, m.pendingName))
 		default:
 			m.confirming = false
+			m.pendingImage = false
 			return m, m.setStatus("cancelled")
 		}
 	}
@@ -236,11 +261,23 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "tab":
 		m.focusRight = !m.focusRight
 		return m, nil
+	case "1":
+		m.tab = tabContainers
+		return m, nil
+	case "2":
+		if m.tab != tabImages {
+			m.toDetails()
+			m.tab = tabImages
+		}
+		return m, nil
 	case "T":
 		m.themeIdx = (m.themeIdx + 1) % len(ThemeNames)
 		ApplyTheme(ThemeNames[m.themeIdx])
 		return m, m.setStatus("theme: " + ThemeNames[m.themeIdx])
 	case "/":
+		if m.tab != tabContainers {
+			return m, nil
+		}
 		m.toDetails()
 		m.filtering = true
 		m.cursor = 0
@@ -261,6 +298,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.vp, cmd = m.vp.Update(msg)
 		return m, cmd
+	}
+
+	if m.tab == tabImages {
+		return m.updateImages(msg)
 	}
 
 	switch msg.String() {
@@ -395,9 +436,19 @@ func (m Model) View() string {
 			"\n" + hintStyle.Render(" q quit")
 	}
 	leftW, rightW, panelH := m.dims()
-	left := panel(m.listTitle(), m.listBody(leftW-2), leftW, panelH, !m.focusRight && !m.helpOpen)
-	right := panel(m.rightTitle(), m.rightBody(), rightW, panelH, m.focusRight && !m.helpOpen)
-	view := lipgloss.JoinHorizontal(lipgloss.Top, left, right) + "\n" + m.bottomBar()
+
+	var left, right string
+	if m.tab == tabImages {
+		left = panel("Images", m.imageListBody(leftW-2), leftW, panelH, !m.focusRight && !m.helpOpen)
+		right = panel("Image", m.imageDetail(), rightW, panelH, m.focusRight && !m.helpOpen)
+	} else {
+		left = panel(m.listTitle(), m.listBody(leftW-2), leftW, panelH, !m.focusRight && !m.helpOpen)
+		right = panel(m.rightTitle(), m.rightBody(), rightW, panelH, m.focusRight && !m.helpOpen)
+	}
+
+	view := m.tabStrip() + "\n" +
+		lipgloss.JoinHorizontal(lipgloss.Top, left, right) + "\n" +
+		m.bottomBar()
 
 	if m.helpOpen {
 		box := m.helpBox()

@@ -5,6 +5,7 @@ import "strings"
 func (m Model) helpBox() string {
 	rows := [][2]string{
 		{"↑ / ↓", "move selection (also j / k)"},
+		{"1 / 2", "switch between containers and images"},
 		{"/", "filter the list by name"},
 		{"space", "collapse or expand a compose group"},
 		{"tab", "switch focus between panels"},
@@ -14,7 +15,8 @@ func (m Model) helpBox() string {
 		{"s", "start container"},
 		{"x", "stop container"},
 		{"r", "restart container"},
-		{"d", "remove container (asks to confirm)"},
+		{"d", "remove container or image (asks to confirm)"},
+		{"p", "prune dangling images (images view)"},
 		{"esc", "back to details"},
 		{"T", "cycle color theme"},
 		{"?", "close this help"},

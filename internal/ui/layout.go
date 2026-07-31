@@ -64,7 +64,7 @@ func stateStyle(ct docker.Container) lipgloss.Style {
 func (m Model) dims() (leftW, rightW, panelH int) {
 	leftW = min(40, max(26, m.width/3))
 	rightW = m.width - leftW
-	panelH = max(3, m.height-1)
+	panelH = max(3, m.height-2)
 	return
 }
 
@@ -214,5 +214,8 @@ func (m Model) bottomBar() string {
 	if m.status != "" {
 		return hintStyle.Render(" " + m.status)
 	}
-	return hintStyle.Render(" / filter · tab focus · enter logs · S stats · e shell · s/x/r/d · ? help · q quit")
+	if m.tab == tabImages {
+		return hintStyle.Render(" 1/2 view · d remove · p prune dangling · ? help · q quit")
+	}
+	return hintStyle.Render(" 1/2 view · / filter · enter logs · S stats · e shell · s/x/r/d · ? help · q quit")
 }

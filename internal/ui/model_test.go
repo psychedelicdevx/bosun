@@ -118,6 +118,26 @@ func TestLogBufferCapped(t *testing.T) {
 	}
 }
 
+func TestImageRemoveNeedsConfirm(t *testing.T) {
+	m := New(nil)
+	m = send(m, imagesMsg{{Repo: "nginx:1.27", ID: "abc"}})
+
+	m = send(m, key("2"))
+	if m.tab != tabImages {
+		t.Fatal("key 2 should switch to images view")
+	}
+
+	m = send(m, key("d"))
+	if !m.confirming || !m.pendingImage || m.pendingName != "nginx:1.27" {
+		t.Fatalf("d should arm image confirm, got confirming=%v image=%v name=%q", m.confirming, m.pendingImage, m.pendingName)
+	}
+
+	m = send(m, key("n"))
+	if m.confirming || m.pendingImage {
+		t.Fatalf("n should cancel image confirm, got confirming=%v image=%v", m.confirming, m.pendingImage)
+	}
+}
+
 func TestComposeGroupingCollapse(t *testing.T) {
 	m := New(nil)
 	m = send(m, containersMsg{
