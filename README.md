@@ -1,6 +1,6 @@
 # bosun
 
-A terminal UI for Docker that stays out of your way. Bordered panels, one-key actions, live logs and stats. It is the tool I wanted while babysitting a dozen containers across side projects, so I built it.
+A fast terminal UI for Docker and Podman that stays out of your way. Bordered panels, one-key actions, live logs you can filter and copy, and containers, images, volumes, and networks all a keypress away. It is the tool I wanted while babysitting a dozen containers across side projects, so I built it.
 
 ![bosun in action](docs/demo.gif)
 
@@ -117,7 +117,7 @@ The whole thing is one static binary. Under the hood:
 
 ## Status
 
-Early but usable every day. Container list, logs, stats, the lifecycle actions, and shell exec all work. Next on the bench: compose project grouping, image and volume panels, and a name filter for when the list gets long.
+Usable every day. Containers, images, volumes, and networks, compose grouping with stack-level actions, live logs with filter and copy, stats, shell exec, the lifecycle actions, and a name filter all work, against Docker or Podman, local or remote. Next on the bench: `ssh://` context support and live refresh through the Docker events API instead of polling.
 
 Issues and pull requests are welcome.
 
