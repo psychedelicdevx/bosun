@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/aymanbagabas/go-osc52/v2"
@@ -47,9 +48,38 @@ func (m Model) shownLogLines() []string {
 	return out
 }
 
+func (m Model) renderedLogLines() []string {
+	lines := m.shownLogLines()
+	out := make([]string, len(lines))
+	if m.logFilter == "" {
+		for i, line := range lines {
+			out[i] = labelStyle.Render(line)
+		}
+		return out
+	}
+
+	matcher := regexp.MustCompile("(?i:" + regexp.QuoteMeta(m.logFilter) + ")")
+	for i, line := range lines {
+		out[i] = renderLogLine(line, matcher.FindAllStringIndex(line, -1))
+	}
+	return out
+}
+
+func renderLogLine(line string, matches [][]int) string {
+	var b strings.Builder
+	last := 0
+	for _, match := range matches {
+		b.WriteString(labelStyle.Render(line[last:match[0]]))
+		b.WriteString(borderActiveStyle.Render(line[match[0]:match[1]]))
+		last = match[1]
+	}
+	b.WriteString(labelStyle.Render(line[last:]))
+	return b.String()
+}
+
 func (m *Model) refreshLogView() {
 	atBottom := m.vp.AtBottom()
-	m.vp.SetContent(strings.Join(m.shownLogLines(), "\n"))
+	m.vp.SetContent(strings.Join(m.renderedLogLines(), "\n"))
 	if atBottom {
 		m.vp.GotoBottom()
 	}

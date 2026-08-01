@@ -219,7 +219,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(m.logLines) > logBufferMax+logBufferSlack {
 			m.logLines = append([]string(nil), m.logLines[len(m.logLines)-logBufferMax:]...)
 		}
-		m.vp.SetContent(strings.Join(m.shownLogLines(), "\n"))
+		m.vp.SetContent(strings.Join(m.renderedLogLines(), "\n"))
 		if atBottom {
 			m.vp.GotoBottom()
 		}

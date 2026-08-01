@@ -95,7 +95,7 @@ func (m Model) listBody(inner int) string {
 			if m.collapsed[r.project] {
 				chevron = "▶"
 			}
-			b.WriteString(headerStyle.Render(chevron + " " + r.project))
+			b.WriteString(groupStyle.Render(chevron + " " + r.project))
 		} else {
 			b.WriteString("    " + stateStyle(r.ct).Render("●") + " " + r.ct.Name)
 		}
@@ -107,20 +107,26 @@ func (m Model) listBody(inner int) string {
 }
 
 func highlightRow(r row, collapsed bool, inner int) string {
-	var plain string
 	if r.header {
 		chevron := "▼"
 		if collapsed {
 			chevron = "▶"
 		}
-		plain = chevron + " " + r.project
-	} else {
-		plain = "    ● " + r.ct.Name
+		line := groupStyle.Background(selectionBg).Render(chevron + " " + r.project)
+		return fillSelection(line, inner)
 	}
-	if pad := inner - lipgloss.Width(plain); pad > 0 {
-		plain += strings.Repeat(" ", pad)
+
+	indent := selRowStyle.Render("    ")
+	dot := stateStyle(r.ct).Background(selectionBg).Render("●")
+	name := selRowStyle.Render(" " + r.ct.Name)
+	return fillSelection(indent+dot+name, inner)
+}
+
+func fillSelection(line string, inner int) string {
+	if gap := inner - lipgloss.Width(line); gap > 0 {
+		line += lipgloss.NewStyle().Background(selectionBg).Render(strings.Repeat(" ", gap))
 	}
-	return selRowStyle.Render(plain)
+	return line
 }
 
 func detailsBody(ct docker.Container) string {
@@ -195,7 +201,7 @@ func (m Model) projectSummary(project string) string {
 	}
 	return fmt.Sprintf(
 		"%s %s\n\n%s  %d\n%s  %d",
-		headerStyle.Render(project), labelStyle.Render("(project)"),
+		groupStyle.Render(project), labelStyle.Render("(project)"),
 		labelStyle.Render("containers"), total,
 		labelStyle.Render("running   "), running,
 	)
@@ -203,7 +209,9 @@ func (m Model) projectSummary(project string) string {
 
 func (m Model) bottomBar() string {
 	if m.confirming {
-		return erroredStyle.Render(" remove " + m.pendingName + "? (y/n)")
+		return " " + erroredStyle.Render("remove "+m.pendingName+"?") + "  " + shortcuts(
+			shortcut{"y", "confirm"}, shortcut{"n", "cancel"},
+		)
 	}
 	if m.logFiltering {
 		return " " + labelStyle.Render("log filter ") + m.logFilter + borderActiveStyle.Render("▏")
@@ -216,18 +224,37 @@ func (m Model) bottomBar() string {
 	}
 	if m.focusRight && m.right == viewLogs {
 		if m.logFilter != "" {
-			return " " + labelStyle.Render("log filter ") + m.logFilter + hintStyle.Render("   / edit · esc clears · y copy")
+			return " " + labelStyle.Render("log filter ") + m.logFilter + "   " + shortcuts(
+				shortcut{"/", "edit"}, shortcut{"esc", "clears"}, shortcut{"y", "copy"},
+			)
 		}
-		return hintStyle.Render(" / filter logs · y copy · esc back · ? help · q quit")
+		return " " + shortcuts(
+			shortcut{"/", "filter logs"}, shortcut{"y", "copy"}, shortcut{"esc", "back"}, shortcut{"?", "help"}, shortcut{"q", "quit"},
+		)
 	}
 	if m.filter != "" {
-		return " " + labelStyle.Render("filter ") + m.filter + hintStyle.Render("   esc clears")
+		return " " + labelStyle.Render("filter ") + m.filter + "   " + shortcuts(shortcut{"esc", "clears"})
 	}
 	switch m.tab {
 	case tabImages:
-		return hintStyle.Render(" 1-4 view · d remove · p prune dangling · ? help · q quit")
+		return " " + shortcuts(shortcut{"1-4", "view"}, shortcut{"d", "remove"}, shortcut{"p", "prune dangling"}, shortcut{"?", "help"}, shortcut{"q", "quit"})
 	case tabVolumes, tabNetworks:
-		return hintStyle.Render(" 1-4 view · d remove · ? help · q quit")
+		return " " + shortcuts(shortcut{"1-4", "view"}, shortcut{"d", "remove"}, shortcut{"?", "help"}, shortcut{"q", "quit"})
 	}
-	return hintStyle.Render(" 1-4 view · / filter · enter logs · S stats · e shell · s/x/r/d · ? help · q quit")
+	return " " + shortcuts(
+		shortcut{"1-4", "view"}, shortcut{"/", "filter"}, shortcut{"enter", "logs"}, shortcut{"S", "stats"}, shortcut{"e", "shell"}, shortcut{"s/x/r/d", "actions"}, shortcut{"?", "help"}, shortcut{"q", "quit"},
+	)
+}
+
+type shortcut struct {
+	key   string
+	label string
+}
+
+func shortcuts(items ...shortcut) string {
+	parts := make([]string, 0, len(items))
+	for _, item := range items {
+		parts = append(parts, keyStyle.Render(item.key)+hintStyle.Render(" "+item.label))
+	}
+	return strings.Join(parts, hintStyle.Render(" · "))
 }

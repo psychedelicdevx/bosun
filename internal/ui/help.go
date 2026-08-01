@@ -28,7 +28,7 @@ func (m Model) helpBox() string {
 	var b strings.Builder
 	b.WriteString("\n")
 	for _, r := range rows {
-		b.WriteString("  " + headerStyle.Render(pad(r[0], 10)) + labelStyle.Render(r[1]) + "\n")
+		b.WriteString("  " + keyStyle.Render(pad(r[0], 10)) + labelStyle.Render(r[1]) + "\n")
 	}
 
 	return panel("Keybindings", strings.TrimRight(b.String(), "\n"), 54, len(rows)+4, true)
