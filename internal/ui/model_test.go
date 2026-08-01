@@ -169,6 +169,31 @@ func TestImageRemoveNeedsConfirm(t *testing.T) {
 	}
 }
 
+func TestStackActionOnHeader(t *testing.T) {
+	m := New(nil)
+	m = send(m, containersMsg{
+		{Name: "shop-web", ID: "1", Project: "shop"},
+		{Name: "shop-db", ID: "2", Project: "shop"},
+	})
+
+	if r, _ := m.currentRow(); !r.header {
+		t.Fatal("cursor 0 should be the shop header")
+	}
+	if ids := m.projectContainerIDs("shop"); len(ids) != 2 {
+		t.Fatalf("shop stack should have 2 containers, got %d", len(ids))
+	}
+
+	m = send(m, key("x"))
+	if m.status != "stopping shop stack..." {
+		t.Fatalf("x on a header should act on the stack, got status %q", m.status)
+	}
+
+	m = send(m, key("s"))
+	if m.status != "starting shop stack..." {
+		t.Fatalf("s on a header should start the stack, got status %q", m.status)
+	}
+}
+
 func TestVolumeRemoveNeedsConfirm(t *testing.T) {
 	m := New(nil)
 	m = send(m, volumesMsg{{Name: "pgdata"}, {Name: "redis"}})
