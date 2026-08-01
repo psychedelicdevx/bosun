@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1280px; height: 640px; }
+  body {
+    display: flex;
+    align-items: center;
+    gap: 44px;
+    padding: 64px;
+    background: radial-gradient(1200px 700px at 78% 18%, #232338 0%, #191926 55%, #13131d 100%);
+    font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
+    color: #cdd6f4;
+    overflow: hidden;
+  }
+
+  .left { width: 470px; flex: none; }
+  .brand { display: flex; align-items: baseline; gap: 14px; margin-bottom: 26px; }
+  .logo { font-size: 76px; font-weight: 700; letter-spacing: -2px; color: #f5f6fb; }
+  .logo .b { color: #a6e3a1; }
+  .ver { font-size: 18px; color: #6c7086; padding-bottom: 12px; }
+
+  .tag { font-size: 27px; line-height: 1.32; color: #bac2de; margin-bottom: 30px; font-weight: 500; }
+  .tag b { color: #a6e3a1; font-weight: 600; }
+
+  ul { list-style: none; display: flex; flex-direction: column; gap: 13px; }
+  li { font-size: 18.5px; color: #a6adc8; display: flex; align-items: center; gap: 12px; }
+  li::before { content: "›"; color: #89b4fa; font-weight: 700; font-size: 20px; }
+
+  .foot { margin-top: 32px; font-size: 17px; color: #6c7086; }
+  .foot b { color: #cdd6f4; font-weight: 600; }
+
+  /* terminal mock */
+  .term {
+    flex: 1;
+    height: 466px;
+    background: #1e1e2e;
+    border-radius: 12px;
+    box-shadow: 0 30px 70px rgba(0,0,0,.5), 0 0 0 1px rgba(166,227,161,.10);
+    padding: 16px 18px 12px;
+    display: flex;
+    flex-direction: column;
+    font-size: 14px;
+    line-height: 1.5;
+    overflow: hidden;
+  }
+  .tabs { color: #6c7086; margin-bottom: 12px; font-size: 14px; }
+  .tabs .on { color: #a6e3a1; font-weight: 600; }
+  .panels { display: flex; gap: 14px; flex: 1; min-height: 0; }
+  .panel { border: 1px solid #45475a; border-radius: 8px; padding: 6px 10px; min-height: 0; overflow: hidden; }
+  .panel.left-p { width: 232px; flex: none; }
+  .panel.right-p { flex: 1; border-color: #a6e3a1; }
+  .ptitle { color: #45475a; font-size: 12.5px; margin-bottom: 6px; }
+  .panel.right-p .ptitle { color: #a6e3a1; }
+
+  .grp { color: #f9e2af; }
+  .row { color: #cdd6f4; padding-left: 8px; }
+  .row .dot { color: #a6e3a1; }
+  .row .red { color: #f38ba8; }
+  .sel { background: #313244; border-radius: 4px; }
+
+  .log { color: #9399b2; white-space: nowrap; }
+  .log .m { color: #a6e3a1; }
+  .log .w { color: #f9e2af; }
+  .log .hi { color: #cdd6f4; }
+  .bar { margin-top: 9px; color: #585b70; font-size: 12.5px; }
+  .bar .k { color: #89b4fa; }
+</style>
+</head>
+<body>
+  <div class="left">
+    <div class="brand">
+      <div class="logo"><span class="b">b</span>osun</div>
+      <div class="ver">v0.6</div>
+    </div>
+    <div class="tag">A fast terminal UI for <b>Docker</b> and <b>Podman</b>. Your containers, one keypress away.</div>
+    <ul>
+      <li>Compose stacks grouped, start/stop together</li>
+      <li>Live logs with filter and clipboard copy</li>
+      <li>Containers, images, volumes, networks</li>
+      <li>Follows your docker context, local or remote</li>
+    </ul>
+    <div class="foot"><b>brew install</b> psychedelicdevx/tap/bosun</div>
+  </div>
+
+  <div class="term">
+    <div class="tabs"><span class="on">Containers</span> &nbsp;·&nbsp; Images &nbsp;·&nbsp; Volumes &nbsp;·&nbsp; Networks</div>
+    <div class="panels">
+      <div class="panel left-p">
+        <div class="ptitle">Containers</div>
+        <div class="grp">▼ shop</div>
+        <div class="row"><span class="dot">●</span> shop-web</div>
+        <div class="row sel"><span class="dot">●</span> shop-api</div>
+        <div class="row"><span class="dot">●</span> shop-postgres</div>
+        <div class="row"><span class="red">●</span> shop-migrate</div>
+        <div class="grp">▼ blog</div>
+        <div class="row"><span class="dot">●</span> blog-web</div>
+        <div class="row"><span class="dot">●</span> blog-db</div>
+      </div>
+      <div class="panel right-p">
+        <div class="ptitle">Logs: shop-api  ·  filter: job</div>
+        <div class="log">10:24:01 level=info msg="<span class="m">job</span> picked up" id=8841</div>
+        <div class="log">10:24:01 <span class="hi">GET  /api/orders     200  14ms</span></div>
+        <div class="log">10:24:02 level=<span class="w">warn</span> msg="retrying upstream"</div>
+        <div class="log">10:24:02 level=info msg="<span class="m">job</span> done" dur=112ms</div>
+        <div class="log">10:24:03 POST /api/webhooks   202   5ms</div>
+        <div class="log">10:24:03 <span class="hi">GET  /healthz        200   1ms</span></div>
+        <div class="bar"><span class="k">/</span> filter logs · <span class="k">y</span> copy · <span class="k">esc</span> back</div>
+      </div>
+    </div>
+    <div class="bar"><span class="k">1-4</span> view · <span class="k">/</span> filter · <span class="k">enter</span> logs · <span class="k">s/x/r</span> stack · <span class="k">?</span> help</div>
+  </div>
+</body>
+</html>
