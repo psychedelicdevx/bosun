@@ -45,7 +45,7 @@ bosun
 
 It connects to your local daemon through the usual socket (it respects `DOCKER_HOST` if you set it), lists every container, and hands you the keyboard. The list on the left is what you navigate. The panel on the right shows details, and switches to logs or stats when you ask for them. Whichever panel has focus gets a green border, same idea as lazygit.
 
-If you run Compose stacks, the list groups containers by project so you can see each stack together and collapse the ones you are not touching right now. Containers that are not part of a project sit in their own group at the bottom.
+If you run Compose stacks, the list groups containers by project so you can see each stack together and collapse the ones you are not touching right now. Containers that are not part of a project sit in their own group at the bottom. With the cursor on a project header, `s`, `x`, and `r` start, stop, or restart the whole stack at once. It operates the containers that already exist rather than recreating them from the compose file, so it stays fast and works the same over a remote daemon.
 
 Press `1` through `4` to switch between four views. Containers is the default. Images shows every image with its size, lets you remove ones you do not need, and prunes the dangling `<none>` images that pile up after rebuilds. Volumes lists your named volumes with their driver and mountpoint. Networks lists your networks with their driver, scope, subnet, and gateway. In the volumes and networks views, `d` removes the selected one after asking.
 
