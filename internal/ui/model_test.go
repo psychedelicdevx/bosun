@@ -118,6 +118,37 @@ func TestLogBufferCapped(t *testing.T) {
 	}
 }
 
+func TestLogFilter(t *testing.T) {
+	m := New(nil)
+	m.right = viewLogs
+	m.focusRight = true
+	m.logLines = []string{"info: started", "ERROR: boom", "info: ok", "error: again"}
+
+	m = send(m, key("/"))
+	if !m.logFiltering {
+		t.Fatal("/ in log view should enter log filtering")
+	}
+	for _, r := range "error" {
+		m = send(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+	}
+	if got := len(m.shownLogLines()); got != 2 {
+		t.Fatalf("filter error: want 2 shown, got %d (%v)", got, m.shownLogLines())
+	}
+
+	m = send(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.logFiltering {
+		t.Fatal("enter should stop typing but keep filter")
+	}
+	if m.logFilter != "error" || len(m.shownLogLines()) != 2 {
+		t.Fatalf("filter should persist after enter, got %q shown=%d", m.logFilter, len(m.shownLogLines()))
+	}
+
+	m = send(m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.logFilter != "" || len(m.shownLogLines()) != 4 {
+		t.Fatalf("esc should clear log filter, got %q shown=%d", m.logFilter, len(m.shownLogLines()))
+	}
+}
+
 func TestImageRemoveNeedsConfirm(t *testing.T) {
 	m := New(nil)
 	m = send(m, imagesMsg{{Repo: "nginx:1.27", ID: "abc"}})
