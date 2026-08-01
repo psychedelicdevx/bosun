@@ -47,7 +47,7 @@ It connects to your local daemon through the usual socket (it respects `DOCKER_H
 
 If you run Compose stacks, the list groups containers by project so you can see each stack together and collapse the ones you are not touching right now. Containers that are not part of a project sit in their own group at the bottom.
 
-Press `1` and `2` to switch between the containers view and an images view, where you can see every image with its size, remove ones you do not need, and prune the dangling `<none>` images that pile up after rebuilds.
+Press `1` through `4` to switch between four views. Containers is the default. Images shows every image with its size, lets you remove ones you do not need, and prunes the dangling `<none>` images that pile up after rebuilds. Volumes lists your named volumes with their driver and mountpoint. Networks lists your networks with their driver, scope, subnet, and gateway. In the volumes and networks views, `d` removes the selected one after asking.
 
 If the daemon is down or the socket is not readable, bosun tells you in plain language instead of dumping a stack trace.
 
@@ -58,7 +58,7 @@ Want to try it without touching your real containers? Run `bosun --demo` for a s
 | Key | What it does |
 | --- | --- |
 | `↑` `↓` or `k` `j` | move through the list |
-| `1` / `2` | switch between containers and images |
+| `1`–`4` | switch between containers, images, volumes, networks |
 | `/` | filter the list by name |
 | `space` | collapse or expand a compose group |
 | `tab` | switch focus between the two panels |
