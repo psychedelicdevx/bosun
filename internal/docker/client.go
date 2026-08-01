@@ -13,3 +13,11 @@ func New() (*Client, error) {
 	}
 	return &Client{cli: cli}, nil
 }
+
+func NewWithHost(host string) (*Client, error) {
+	cli, err := client.NewClientWithOpts(client.WithHost(host), client.WithAPIVersionNegotiation())
+	if err != nil {
+		return nil, err
+	}
+	return &Client{cli: cli}, nil
+}
