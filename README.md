@@ -51,7 +51,18 @@ You can point it at another daemon. bosun follows your active `docker context`, 
 bosun --host tcp://10.0.0.5:2375
 ```
 
-`tcp://` and `unix://` endpoints work today. `ssh://` contexts are not wired up yet, so for an SSH-reachable daemon expose it over `tcp://` (or open a tunnel) and point `DOCKER_HOST` or `--host` at that. The list on the left is what you navigate. The panel on the right shows details, and switches to logs or stats when you ask for them. Whichever panel has focus gets a green border, same idea as lazygit.
+`tcp://` and `unix://` endpoints work today. `ssh://` contexts are not wired up yet, so for an SSH-reachable daemon expose it over `tcp://` (or open a tunnel) and point `DOCKER_HOST` or `--host` at that.
+
+### Podman
+
+bosun talks to the Docker API directly, so it works with Podman too. Start Podman's API service and point bosun at its socket:
+
+```bash
+podman system service --time=0 &
+bosun --host unix://$XDG_RUNTIME_DIR/podman/podman.sock
+```
+
+Listing containers and images, streaming and filtering logs, and the lifecycle actions all work against Podman. Live stats depend on your Podman host having cgroups set up the usual way; if your setup cannot report them, bosun says so instead of guessing. The list on the left is what you navigate. The panel on the right shows details, and switches to logs or stats when you ask for them. Whichever panel has focus gets a green border, same idea as lazygit.
 
 If you run Compose stacks, the list groups containers by project so you can see each stack together and collapse the ones you are not touching right now. Containers that are not part of a project sit in their own group at the bottom. With the cursor on a project header, `s`, `x`, and `r` start, stop, or restart the whole stack at once. It operates the containers that already exist rather than recreating them from the compose file, so it stays fast and works the same over a remote daemon.
 
