@@ -36,11 +36,13 @@ type Model struct {
 	focusRight bool
 	helpOpen   bool
 
-	vp        viewport.Model
-	logLines  []string
-	logChan   <-chan string
-	logCancel context.CancelFunc
-	logGen    int
+	vp           viewport.Model
+	logLines     []string
+	logChan      <-chan string
+	logCancel    context.CancelFunc
+	logGen       int
+	logFilter    string
+	logFiltering bool
 
 	stats       docker.Stats
 	haveStats   bool
@@ -196,7 +198,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(m.logLines) > logBufferMax+logBufferSlack {
 			m.logLines = append([]string(nil), m.logLines[len(m.logLines)-logBufferMax:]...)
 		}
-		m.vp.SetContent(strings.Join(m.logLines, "\n"))
+		m.vp.SetContent(strings.Join(m.shownLogLines(), "\n"))
 		if atBottom {
 			m.vp.GotoBottom()
 		}
@@ -250,6 +252,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateFilter(msg)
 	}
 
+	if m.logFiltering {
+		return m.updateLogFilter(msg)
+	}
+
 	switch msg.String() {
 	case "q", "ctrl+c":
 		m.stopLogs()
@@ -275,6 +281,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		ApplyTheme(ThemeNames[m.themeIdx])
 		return m, m.setStatus("theme: " + ThemeNames[m.themeIdx])
 	case "/":
+		if m.focusRight && m.right == viewLogs {
+			m.logFiltering = true
+			return m, nil
+		}
 		if m.tab != tabContainers {
 			return m, nil
 		}
@@ -283,6 +293,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = 0
 		return m, nil
 	case "esc":
+		if m.right == viewLogs && (m.logFilter != "" || m.logFiltering) {
+			m.logFiltering = false
+			m.logFilter = ""
+			m.refreshLogView()
+			return m, nil
+		}
 		if m.right != viewDetails || m.focusRight {
 			m.toDetails()
 			return m, nil
@@ -295,6 +311,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.focusRight && m.right == viewLogs {
+		if msg.String() == "y" {
+			return m.copyLogs()
+		}
 		var cmd tea.Cmd
 		m.vp, cmd = m.vp.Update(msg)
 		return m, cmd
@@ -396,6 +415,8 @@ func (m Model) openLogs() (tea.Model, tea.Cmd) {
 	m.logCancel = cancel
 	m.logChan = ch
 	m.logLines = nil
+	m.logFilter = ""
+	m.logFiltering = false
 	m.vp.SetContent("")
 	m.vp.GotoTop()
 	m.right = viewLogs
