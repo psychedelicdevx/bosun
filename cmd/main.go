@@ -32,7 +32,7 @@ func main() {
 	if hasFlag("--demo") || os.Getenv("BOSUN_DEMO") != "" {
 		engine = demo.New()
 	} else {
-		client, err := docker.New()
+		client, err := connectDocker()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "bosun: cannot connect to docker: %v\n", err)
 			os.Exit(1)
@@ -45,6 +45,23 @@ func main() {
 		fmt.Fprintf(os.Stderr, "bosun: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func connectDocker() (*docker.Client, error) {
+	if h := flagValue("--host", ""); h != "" {
+		return docker.NewWithHost(h)
+	}
+	if os.Getenv("DOCKER_HOST") != "" {
+		return docker.New()
+	}
+	if h := docker.ContextHost(); h != "" {
+		if strings.HasPrefix(h, "ssh://") {
+			fmt.Fprintf(os.Stderr, "bosun: docker context points at %s; ssh endpoints are not supported yet, using the default socket. set DOCKER_HOST to a tcp:// endpoint for a remote daemon.\n", h)
+			return docker.New()
+		}
+		return docker.NewWithHost(h)
+	}
+	return docker.New()
 }
 
 func hasFlag(f string) bool {
