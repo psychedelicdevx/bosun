@@ -205,14 +205,23 @@ func (m Model) bottomBar() string {
 	if m.confirming {
 		return erroredStyle.Render(" remove " + m.pendingName + "? (y/n)")
 	}
+	if m.logFiltering {
+		return " " + labelStyle.Render("log filter ") + m.logFilter + borderActiveStyle.Render("▏")
+	}
 	if m.filtering {
 		return " " + labelStyle.Render("filter ") + m.filter + borderActiveStyle.Render("▏")
 	}
-	if m.filter != "" {
-		return " " + labelStyle.Render("filter ") + m.filter + hintStyle.Render("   esc clears")
-	}
 	if m.status != "" {
 		return hintStyle.Render(" " + m.status)
+	}
+	if m.focusRight && m.right == viewLogs {
+		if m.logFilter != "" {
+			return " " + labelStyle.Render("log filter ") + m.logFilter + hintStyle.Render("   / edit · esc clears · y copy")
+		}
+		return hintStyle.Render(" / filter logs · y copy · esc back · ? help · q quit")
+	}
+	if m.filter != "" {
+		return " " + labelStyle.Render("filter ") + m.filter + hintStyle.Render("   esc clears")
 	}
 	if m.tab == tabImages {
 		return hintStyle.Render(" 1/2 view · d remove · p prune dangling · ? help · q quit")

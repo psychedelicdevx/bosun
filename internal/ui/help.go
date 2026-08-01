@@ -10,6 +10,8 @@ func (m Model) helpBox() string {
 		{"space", "collapse or expand a compose group"},
 		{"tab", "switch focus between panels"},
 		{"enter", "stream logs for the selected container"},
+		{"/ logs", "filter log lines by text"},
+		{"y logs", "copy shown logs to clipboard"},
 		{"S", "live CPU / memory stats"},
 		{"e", "shell into a running container"},
 		{"s", "start container"},
