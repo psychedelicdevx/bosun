@@ -63,6 +63,8 @@ Want to try it without touching your real containers? Run `bosun --demo` for a s
 | `space` | collapse or expand a compose group |
 | `tab` | switch focus between the two panels |
 | `enter` | stream logs for the selected container |
+| `/` (in logs) | filter log lines by text as they stream |
+| `y` (in logs) | copy the shown logs to your clipboard |
 | `S` | live CPU and memory |
 | `e` | drop into a shell inside a running container |
 | `s` | start |
@@ -74,7 +76,7 @@ Want to try it without touching your real containers? Run `bosun --demo` for a s
 | `?` | show the keybindings |
 | `q` | quit |
 
-Logs follow along at the bottom while new lines arrive. Scroll up and it stops chasing so you can read, then it picks back up once you return to the bottom. The list refreshes itself every couple of seconds, so anything you change from another terminal shows up on its own.
+Logs follow along at the bottom while new lines arrive. Scroll up and it stops chasing so you can read, then it picks back up once you return to the bottom. Press `/` while viewing logs to filter to just the lines that match, and `y` to copy what you are looking at to your clipboard. The copy uses the terminal's own clipboard escape, so it works over SSH too. The list refreshes itself every couple of seconds, so anything you change from another terminal shows up on its own.
 
 ## Themes
 
