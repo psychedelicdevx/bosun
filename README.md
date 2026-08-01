@@ -43,7 +43,15 @@ Run it:
 bosun
 ```
 
-It connects to your local daemon through the usual socket (it respects `DOCKER_HOST` if you set it), lists every container, and hands you the keyboard. The list on the left is what you navigate. The panel on the right shows details, and switches to logs or stats when you ask for them. Whichever panel has focus gets a green border, same idea as lazygit.
+It connects to your local daemon through the usual socket, lists every container, and hands you the keyboard.
+
+You can point it at another daemon. bosun follows your active `docker context`, so if you have run `docker context use` it connects there without any extra setup. `DOCKER_HOST` overrides that, and a `--host` flag overrides everything:
+
+```bash
+bosun --host tcp://10.0.0.5:2375
+```
+
+`tcp://` and `unix://` endpoints work today. `ssh://` contexts are not wired up yet, so for an SSH-reachable daemon expose it over `tcp://` (or open a tunnel) and point `DOCKER_HOST` or `--host` at that. The list on the left is what you navigate. The panel on the right shows details, and switches to logs or stats when you ask for them. Whichever panel has focus gets a green border, same idea as lazygit.
 
 If you run Compose stacks, the list groups containers by project so you can see each stack together and collapse the ones you are not touching right now. Containers that are not part of a project sit in their own group at the bottom. With the cursor on a project header, `s`, `x`, and `r` start, stop, or restart the whole stack at once. It operates the containers that already exist rather than recreating them from the compose file, so it stays fast and works the same over a remote daemon.
 
