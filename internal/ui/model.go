@@ -404,12 +404,19 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, execShell(ct.ID, ct.Name)
 	case "s", "x", "r":
+		verb := map[string]string{"s": "start", "x": "stop", "r": "restart"}[msg.String()]
+		if r, ok := m.currentRow(); ok && r.header {
+			ids := m.projectContainerIDs(r.project)
+			if len(ids) == 0 {
+				return m, nil
+			}
+			return m, tea.Batch(m.setStatus(gerund[verb]+" "+r.project+" stack..."), m.stackAction(verb, r.project, ids))
+		}
 		ct, ok := m.selected()
 		if !ok {
 			return m, nil
 		}
-		verb := map[string]string{"s": "start", "x": "stop", "r": "restart"}[msg.String()]
-		return m, tea.Batch(m.setStatus(verb+"ing "+ct.Name+"..."), m.doAction(verb, ct.ID, ct.Name))
+		return m, tea.Batch(m.setStatus(gerund[verb]+" "+ct.Name+"..."), m.doAction(verb, ct.ID, ct.Name))
 	case "d":
 		ct, ok := m.selected()
 		if !ok {

@@ -20,6 +20,12 @@ var pastTense = map[string]string{
 	"remove":  "removed",
 }
 
+var gerund = map[string]string{
+	"start":   "starting",
+	"stop":    "stopping",
+	"restart": "restarting",
+}
+
 func (m Model) doAction(verb, id, name string) tea.Cmd {
 	client := m.client
 	return func() tea.Msg {
@@ -36,6 +42,29 @@ func (m Model) doAction(verb, id, name string) tea.Cmd {
 			err = client.Remove(ctx, id)
 		}
 		return actionDoneMsg{verb, name, err}
+	}
+}
+
+func (m Model) stackAction(verb, project string, ids []string) tea.Cmd {
+	client := m.client
+	return func() tea.Msg {
+		ctx := context.Background()
+		var err error
+		for _, id := range ids {
+			var e error
+			switch verb {
+			case "start":
+				e = client.Start(ctx, id)
+			case "stop":
+				e = client.Stop(ctx, id)
+			case "restart":
+				e = client.Restart(ctx, id)
+			}
+			if e != nil && err == nil {
+				err = e
+			}
+		}
+		return actionDoneMsg{verb, project + " stack", err}
 	}
 }
 

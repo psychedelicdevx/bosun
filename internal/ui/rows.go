@@ -47,6 +47,20 @@ func (m Model) rows() []row {
 	return rs
 }
 
+func (m Model) projectContainerIDs(project string) []string {
+	var ids []string
+	for _, c := range m.containers {
+		p := c.Project
+		if p == "" {
+			p = standaloneKey
+		}
+		if p == project {
+			ids = append(ids, c.ID)
+		}
+	}
+	return ids
+}
+
 func (m Model) currentRow() (row, bool) {
 	rs := m.rows()
 	if m.cursor < 0 || m.cursor >= len(rs) {
