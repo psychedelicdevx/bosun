@@ -14,10 +14,24 @@ type Engine struct {
 	mu         sync.Mutex
 	containers []docker.Container
 	images     []docker.Image
+	volumes    []docker.Volume
+	networks   []docker.Network
 }
 
 func New() *Engine {
 	return &Engine{
+		volumes: []docker.Volume{
+			{Name: "shop_pgdata", Driver: "local", Mountpoint: "/var/lib/docker/volumes/shop_pgdata/_data"},
+			{Name: "shop_redis", Driver: "local", Mountpoint: "/var/lib/docker/volumes/shop_redis/_data"},
+			{Name: "blog_mysql", Driver: "local", Mountpoint: "/var/lib/docker/volumes/blog_mysql/_data"},
+			{Name: "caddy_data", Driver: "local", Mountpoint: "/var/lib/docker/volumes/caddy_data/_data"},
+		},
+		networks: []docker.Network{
+			{ID: "b1c2d3e4f506", Name: "bridge", Driver: "bridge", Scope: "local", Subnet: "172.17.0.0/16", Gateway: "172.17.0.1"},
+			{ID: "c2d3e4f506b1", Name: "shop_default", Driver: "bridge", Scope: "local", Subnet: "172.20.0.0/16", Gateway: "172.20.0.1"},
+			{ID: "d3e4f506b1c2", Name: "blog_default", Driver: "bridge", Scope: "local", Subnet: "172.21.0.0/16", Gateway: "172.21.0.1"},
+			{ID: "e4f506b1c2d3", Name: "host", Driver: "host", Scope: "local"},
+		},
 		images: []docker.Image{
 			{ID: "a1f2e3d4c5b6", Repo: "nginx:1.27", Size: 187_000_000, Created: 1750000000},
 			{ID: "b2e3d4c5b6a1", Repo: "postgres:16", Size: 431_000_000, Created: 1749000000},
@@ -78,6 +92,44 @@ func (e *Engine) PruneImages(ctx context.Context) (uint64, error) {
 	}
 	e.images = out
 	return reclaimed, nil
+}
+
+func (e *Engine) Volumes(ctx context.Context) ([]docker.Volume, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]docker.Volume(nil), e.volumes...), nil
+}
+
+func (e *Engine) RemoveVolume(ctx context.Context, name string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	out := e.volumes[:0]
+	for _, v := range e.volumes {
+		if v.Name != name {
+			out = append(out, v)
+		}
+	}
+	e.volumes = out
+	return nil
+}
+
+func (e *Engine) Networks(ctx context.Context) ([]docker.Network, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]docker.Network(nil), e.networks...), nil
+}
+
+func (e *Engine) RemoveNetwork(ctx context.Context, id string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	out := e.networks[:0]
+	for _, n := range e.networks {
+		if n.ID != id {
+			out = append(out, n)
+		}
+	}
+	e.networks = out
+	return nil
 }
 
 var demoLog = []string{

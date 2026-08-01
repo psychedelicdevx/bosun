@@ -18,4 +18,10 @@ type Engine interface {
 	Images(ctx context.Context) ([]docker.Image, error)
 	RemoveImage(ctx context.Context, id string) error
 	PruneImages(ctx context.Context) (uint64, error)
+
+	Volumes(ctx context.Context) ([]docker.Volume, error)
+	RemoveVolume(ctx context.Context, name string) error
+
+	Networks(ctx context.Context) ([]docker.Network, error)
+	RemoveNetwork(ctx context.Context, id string) error
 }
