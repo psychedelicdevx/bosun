@@ -53,13 +53,17 @@ type Model struct {
 	tab       tab
 	images    []docker.Image
 	imgCursor int
+	volumes   []docker.Volume
+	volCursor int
+	networks  []docker.Network
+	netCursor int
 
-	status       string
-	statusGen    int
-	confirming   bool
-	pendingImage bool
-	pendingID    string
-	pendingName  string
+	status      string
+	statusGen   int
+	confirming  bool
+	pendingKind string
+	pendingID   string
+	pendingName string
 
 	filter    string
 	filtering bool
@@ -147,7 +151,7 @@ func (m Model) fetch() tea.Msg {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.fetch, m.fetchImages, tick())
+	return tea.Batch(m.fetch, m.fetchImages, m.fetchVolumes, m.fetchNetworks, tick())
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -159,13 +163,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.vp.Height = max(1, panelH-2)
 		return m, nil
 	case tickMsg:
-		return m, tea.Batch(m.fetch, m.fetchImages, tick())
+		return m, tea.Batch(m.fetch, m.fetchImages, m.fetchVolumes, m.fetchNetworks, tick())
 	case imagesMsg:
 		m.images = msg
 		if m.imgCursor > len(m.images)-1 {
 			m.imgCursor = max(0, len(m.images)-1)
 		}
 		return m, nil
+	case volumesMsg:
+		m.volumes = msg
+		if m.volCursor > len(m.volumes)-1 {
+			m.volCursor = max(0, len(m.volumes)-1)
+		}
+		return m, nil
+	case networksMsg:
+		m.networks = msg
+		if m.netCursor > len(m.networks)-1 {
+			m.netCursor = max(0, len(m.networks)-1)
+		}
+		return m, nil
+	case resourceDoneMsg:
+		if msg.err != nil {
+			return m, m.setStatus(msg.verb + " " + msg.name + " failed: " + msg.err.Error())
+		}
+		return m, tea.Batch(m.setStatus(msg.verb+" "+msg.name), m.fetchVolumes, m.fetchNetworks)
 	case imageDoneMsg:
 		if msg.err != nil {
 			return m, m.setStatus(msg.verb + " failed: " + msg.err.Error())
@@ -236,14 +257,21 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "y", "enter":
 			m.confirming = false
-			if m.pendingImage {
-				m.pendingImage = false
-				return m, tea.Batch(m.setStatus("removing image "+m.pendingName+"..."), m.removeImage(m.pendingID, m.pendingName))
+			kind, id, name := m.pendingKind, m.pendingID, m.pendingName
+			m.pendingKind = ""
+			switch kind {
+			case "image":
+				return m, tea.Batch(m.setStatus("removing image "+name+"..."), m.removeImage(id, name))
+			case "volume":
+				return m, tea.Batch(m.setStatus("removing volume "+name+"..."), m.removeVolume(name))
+			case "network":
+				return m, tea.Batch(m.setStatus("removing network "+name+"..."), m.removeNetwork(id, name))
+			default:
+				return m, tea.Batch(m.setStatus("removing "+name+"..."), m.doAction("remove", id, name))
 			}
-			return m, tea.Batch(m.setStatus("removing "+m.pendingName+"..."), m.doAction("remove", m.pendingID, m.pendingName))
 		default:
 			m.confirming = false
-			m.pendingImage = false
+			m.pendingKind = ""
 			return m, m.setStatus("cancelled")
 		}
 	}
@@ -274,6 +302,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.tab != tabImages {
 			m.toDetails()
 			m.tab = tabImages
+		}
+		return m, nil
+	case "3":
+		if m.tab != tabVolumes {
+			m.toDetails()
+			m.tab = tabVolumes
+		}
+		return m, nil
+	case "4":
+		if m.tab != tabNetworks {
+			m.toDetails()
+			m.tab = tabNetworks
 		}
 		return m, nil
 	case "T":
@@ -321,6 +361,12 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	if m.tab == tabImages {
 		return m.updateImages(msg)
+	}
+	if m.tab == tabVolumes {
+		return m.updateVolumes(msg)
+	}
+	if m.tab == tabNetworks {
+		return m.updateNetworks(msg)
 	}
 
 	switch msg.String() {
@@ -458,13 +504,22 @@ func (m Model) View() string {
 	}
 	leftW, rightW, panelH := m.dims()
 
+	leftActive := !m.focusRight && !m.helpOpen
+	rightActive := m.focusRight && !m.helpOpen
 	var left, right string
-	if m.tab == tabImages {
-		left = panel("Images", m.imageListBody(leftW-2), leftW, panelH, !m.focusRight && !m.helpOpen)
-		right = panel("Image", m.imageDetail(), rightW, panelH, m.focusRight && !m.helpOpen)
-	} else {
-		left = panel(m.listTitle(), m.listBody(leftW-2), leftW, panelH, !m.focusRight && !m.helpOpen)
-		right = panel(m.rightTitle(), m.rightBody(), rightW, panelH, m.focusRight && !m.helpOpen)
+	switch m.tab {
+	case tabImages:
+		left = panel("Images", m.imageListBody(leftW-2), leftW, panelH, leftActive)
+		right = panel("Image", m.imageDetail(), rightW, panelH, rightActive)
+	case tabVolumes:
+		left = panel("Volumes", m.volumeListBody(leftW-2), leftW, panelH, leftActive)
+		right = panel("Volume", m.volumeDetail(), rightW, panelH, rightActive)
+	case tabNetworks:
+		left = panel("Networks", m.networkListBody(leftW-2), leftW, panelH, leftActive)
+		right = panel("Network", m.networkDetail(), rightW, panelH, rightActive)
+	default:
+		left = panel(m.listTitle(), m.listBody(leftW-2), leftW, panelH, leftActive)
+		right = panel(m.rightTitle(), m.rightBody(), rightW, panelH, rightActive)
 	}
 
 	view := m.tabStrip() + "\n" +

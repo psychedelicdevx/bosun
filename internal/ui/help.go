@@ -5,7 +5,7 @@ import "strings"
 func (m Model) helpBox() string {
 	rows := [][2]string{
 		{"↑ / ↓", "move selection (also j / k)"},
-		{"1 / 2", "switch between containers and images"},
+		{"1-4", "containers / images / volumes / networks"},
 		{"/", "filter the list by name"},
 		{"space", "collapse or expand a compose group"},
 		{"tab", "switch focus between panels"},

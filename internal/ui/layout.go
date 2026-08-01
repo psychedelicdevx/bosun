@@ -223,8 +223,11 @@ func (m Model) bottomBar() string {
 	if m.filter != "" {
 		return " " + labelStyle.Render("filter ") + m.filter + hintStyle.Render("   esc clears")
 	}
-	if m.tab == tabImages {
-		return hintStyle.Render(" 1/2 view · d remove · p prune dangling · ? help · q quit")
+	switch m.tab {
+	case tabImages:
+		return hintStyle.Render(" 1-4 view · d remove · p prune dangling · ? help · q quit")
+	case tabVolumes, tabNetworks:
+		return hintStyle.Render(" 1-4 view · d remove · ? help · q quit")
 	}
-	return hintStyle.Render(" 1/2 view · / filter · enter logs · S stats · e shell · s/x/r/d · ? help · q quit")
+	return hintStyle.Render(" 1-4 view · / filter · enter logs · S stats · e shell · s/x/r/d · ? help · q quit")
 }

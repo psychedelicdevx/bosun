@@ -17,6 +17,8 @@ type tab int
 const (
 	tabContainers tab = iota
 	tabImages
+	tabVolumes
+	tabNetworks
 )
 
 type imagesMsg []docker.Image
@@ -68,7 +70,7 @@ func (m Model) updateImages(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		im := m.images[m.imgCursor]
 		m.confirming = true
-		m.pendingImage = true
+		m.pendingKind = "image"
 		m.pendingID = im.ID
 		m.pendingName = im.Repo
 	case "p":
@@ -84,8 +86,11 @@ func (m Model) tabStrip() string {
 		}
 		return hintStyle.Render(s)
 	}
+	sep := hintStyle.Render("  ·  ")
 	return " " + name("Containers", m.tab == tabContainers) +
-		hintStyle.Render("  ·  ") + name("Images", m.tab == tabImages)
+		sep + name("Images", m.tab == tabImages) +
+		sep + name("Volumes", m.tab == tabVolumes) +
+		sep + name("Networks", m.tab == tabNetworks)
 }
 
 func (m Model) imageListBody(inner int) string {
