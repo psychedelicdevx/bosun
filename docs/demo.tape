@@ -2,7 +2,7 @@ Output docs/demo.gif
 
 Set Shell "bash"
 Set FontSize 16
-Set Width 1100
+Set Width 1160
 Set Height 640
 Set Padding 20
 Set Theme "Catppuccin Mocha"
@@ -18,43 +18,57 @@ Sleep 1s
 
 # compose groups: collapse and expand the shop stack
 Space
-Sleep 1s
+Sleep 800ms
 Space
 Sleep 800ms
 
-# move the highlight down onto a container
-Down@450ms 2
-Sleep 1s
-
-# stream its logs, focus the pane, scroll
+# move onto a running container and stream its logs
+Down@400ms 2
+Sleep 800ms
 Enter
-Sleep 3s
-Tab
-Sleep 400ms
-Down@350ms 4
-Sleep 1s
-Escape
-Sleep 800ms
+Sleep 2500ms
 
-# live stats
-Type "S"
-Sleep 3s
-Escape
-Sleep 800ms
-
-# filter the list by name
+# filter the log stream live
 Type "/"
+Sleep 400ms
+Type "job"
+Sleep 2s
+Escape
 Sleep 500ms
-Type "blog"
+
+# copy the shown logs to the clipboard
+Type "y"
 Sleep 1800ms
 Escape
 Sleep 800ms
 
-# help overlay
+# tour the tabs: images, volumes, networks
+Type "2"
+Sleep 1600ms
+Type "3"
+Sleep 1400ms
+Down@400ms 2
+Sleep 800ms
+Type "4"
+Sleep 1600ms
+Down@400ms 1
+Sleep 1200ms
+
+# back to containers, operate a whole stack from its header
+Type "1"
+Sleep 500ms
+Up@400ms 2
+Sleep 700ms
+Type "x"
+Sleep 2200ms
+Type "s"
+Sleep 2200ms
+
+# keybindings overlay
 Type "?"
 Sleep 2500ms
 Type "?"
-Sleep 800ms
+Sleep 700ms
 
 Type "q"
 Sleep 1s
