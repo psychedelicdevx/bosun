@@ -159,13 +159,33 @@ func TestImageRemoveNeedsConfirm(t *testing.T) {
 	}
 
 	m = send(m, key("d"))
-	if !m.confirming || !m.pendingImage || m.pendingName != "nginx:1.27" {
-		t.Fatalf("d should arm image confirm, got confirming=%v image=%v name=%q", m.confirming, m.pendingImage, m.pendingName)
+	if !m.confirming || m.pendingKind != "image" || m.pendingName != "nginx:1.27" {
+		t.Fatalf("d should arm image confirm, got confirming=%v kind=%q name=%q", m.confirming, m.pendingKind, m.pendingName)
 	}
 
 	m = send(m, key("n"))
-	if m.confirming || m.pendingImage {
-		t.Fatalf("n should cancel image confirm, got confirming=%v image=%v", m.confirming, m.pendingImage)
+	if m.confirming || m.pendingKind != "" {
+		t.Fatalf("n should cancel image confirm, got confirming=%v kind=%q", m.confirming, m.pendingKind)
+	}
+}
+
+func TestVolumeRemoveNeedsConfirm(t *testing.T) {
+	m := New(nil)
+	m = send(m, volumesMsg{{Name: "pgdata"}, {Name: "redis"}})
+
+	m = send(m, key("3"))
+	if m.tab != tabVolumes {
+		t.Fatal("key 3 should switch to volumes view")
+	}
+
+	m = send(m, key("d"))
+	if !m.confirming || m.pendingKind != "volume" || m.pendingName != "pgdata" {
+		t.Fatalf("d should arm volume confirm, got confirming=%v kind=%q name=%q", m.confirming, m.pendingKind, m.pendingName)
+	}
+
+	m = send(m, key("n"))
+	if m.confirming || m.pendingKind != "" {
+		t.Fatalf("n should cancel volume confirm, got confirming=%v kind=%q", m.confirming, m.pendingKind)
 	}
 }
 
