@@ -90,13 +90,15 @@ Want to try it without touching your real containers? Run `bosun --demo` for a s
 | `x` | stop |
 | `r` | restart |
 | `d` | remove the selected container, image, volume, or network, asks first |
-| `p` | prune dangling images (images view) |
+| `p` | prune dangling images, asks first (images view) |
 | `esc` | back to the details view |
 | `T` | cycle color themes |
 | `?` | show the keybindings |
 | `q` | quit |
 
 Logs follow along at the bottom while new lines arrive. Scroll up and it stops chasing so you can read, then it picks back up once you return to the bottom. Press `/` while viewing logs to filter to just the lines that match, and `y` to copy what you are looking at to your clipboard. The copy uses the terminal's own clipboard escape, so it works over SSH too. The list refreshes itself every couple of seconds, so anything you change from another terminal shows up on its own.
+
+Warnings and 4xx responses are highlighted in yellow; errors and 5xx responses are highlighted in red. If a log or stats stream ends, bosun keeps the last data visible and lets you reconnect with `enter`. Resource refresh failures keep the last successful list on screen and label it as cached rather than pretending it is empty.
 
 ## Themes
 
