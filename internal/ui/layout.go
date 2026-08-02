@@ -20,6 +20,8 @@ func panel(title, body string, width, height int, active bool) string {
 	ts := lipgloss.NewStyle().Foreground(lc).Bold(true)
 
 	inner := max(1, width-2)
+	padding := panelPadding(width)
+	contentWidth := max(1, inner-2*padding)
 	bodyH := max(1, height-2)
 
 	label := lipgloss.NewStyle().MaxWidth(max(1, inner-1)).Render(" " + title + " ")
@@ -33,11 +35,22 @@ func panel(title, body string, width, height int, active bool) string {
 		if i < len(lines) {
 			content = lines[i]
 		}
-		rows[i] = bs.Render("│") + fit(content, inner) + bs.Render("│")
+		rows[i] = bs.Render("│") + strings.Repeat(" ", padding) + fit(content, contentWidth) + strings.Repeat(" ", padding) + bs.Render("│")
 	}
 
 	bottom := bs.Render("╰" + strings.Repeat("─", inner) + "╯")
 	return top + "\n" + strings.Join(rows, "\n") + "\n" + bottom
+}
+
+func panelPadding(width int) int {
+	if width >= 16 {
+		return 1
+	}
+	return 0
+}
+
+func panelContentWidth(width int) int {
+	return max(1, width-2-2*panelPadding(width))
 }
 
 func fit(s string, w int) string {
@@ -62,10 +75,55 @@ func stateStyle(ct docker.Container) lipgloss.Style {
 }
 
 func (m Model) dims() (leftW, rightW, panelH int) {
-	leftW = min(40, max(26, m.width/3))
-	rightW = m.width - leftW
-	panelH = max(3, m.height-2)
+	width, height := m.contentSize()
+	gap := m.panelGap()
+	leftW = min(40, max(26, width/3))
+	rightW = max(3, width-leftW-gap)
+	panelH = max(3, height-2-m.tabPanelGap())
 	return
+}
+
+func (m Model) panelGap() int {
+	width, _ := m.contentSize()
+	if width >= 72 {
+		return 1
+	}
+	return 0
+}
+
+func (m Model) tabPanelGap() int {
+	_, height := m.contentSize()
+	if height >= 12 {
+		return 1
+	}
+	return 0
+}
+
+func (m Model) insets() (horizontal, vertical int) {
+	if m.width >= 72 {
+		horizontal = 1
+	}
+	if m.height >= 18 {
+		vertical = 1
+	}
+	return
+}
+
+func (m Model) contentSize() (width, height int) {
+	horizontal, vertical := m.insets()
+	return max(1, m.width-2*horizontal), max(1, m.height-2*vertical)
+}
+
+func (m Model) insetView(view string) string {
+	horizontal, vertical := m.insets()
+	if horizontal > 0 {
+		view = lipgloss.NewStyle().MarginLeft(horizontal).Render(view)
+	}
+	if vertical > 0 {
+		padding := strings.Repeat("\n", vertical)
+		view = padding + view + padding
+	}
+	return view
 }
 
 func (m Model) listTitle() string {
@@ -244,6 +302,24 @@ func (m Model) bottomBar() string {
 	return " " + shortcuts(
 		shortcut{"1-4", "view"}, shortcut{"/", "filter"}, shortcut{"enter", "logs"}, shortcut{"S", "stats"}, shortcut{"e", "shell"}, shortcut{"s/x/r/d", "actions"}, shortcut{"?", "help"}, shortcut{"q", "quit"},
 	)
+}
+
+func (m Model) fittedBottomBar() string {
+	bar := m.bottomBar()
+	width, _ := m.contentSize()
+	if lipgloss.Width(bar) <= width {
+		return bar
+	}
+
+	if !m.confirming && !m.filtering && !m.logFiltering && m.status == "" && m.tab == tabContainers && !(m.focusRight && m.right == viewLogs) {
+		bar = " " + shortcuts(
+			shortcut{"1-4", "view"}, shortcut{"/", "filter"}, shortcut{"enter", "logs"}, shortcut{"s/x/r/d", "act"}, shortcut{"?", "help"}, shortcut{"q", "quit"},
+		)
+		if lipgloss.Width(bar) <= width {
+			return bar
+		}
+	}
+	return lipgloss.NewStyle().MaxWidth(width).Render(bar)
 }
 
 type shortcut struct {

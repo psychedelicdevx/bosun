@@ -159,7 +159,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		_, rightW, panelH := m.dims()
-		m.vp.Width = max(1, rightW-2)
+		m.vp.Width = panelContentWidth(rightW)
 		m.vp.Height = max(1, panelH-2)
 		return m, nil
 	case tickMsg:
@@ -250,8 +250,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.helpOpen {
-		m.helpOpen = false
-		return m, nil
+		switch msg.String() {
+		case "q", "ctrl+c":
+			m.stopLogs()
+			m.stopStats()
+			return m, tea.Quit
+		default:
+			m.helpOpen = false
+			return m, nil
+		}
 	}
 	if m.confirming {
 		switch msg.String() {
@@ -506,8 +513,10 @@ func (m Model) View() string {
 		return "loading bosun..."
 	}
 	if m.err != nil {
-		return panel("Error", "cannot reach docker:\n\n"+m.err.Error(), m.width, m.height-1, true) +
+		width, height := m.contentSize()
+		view := panel("Error", "cannot reach docker:\n\n"+m.err.Error(), width, height-1, true) +
 			"\n" + hintStyle.Render(" q quit")
+		return m.insetView(view)
 	}
 	leftW, rightW, panelH := m.dims()
 
@@ -516,28 +525,30 @@ func (m Model) View() string {
 	var left, right string
 	switch m.tab {
 	case tabImages:
-		left = panel("Images", m.imageListBody(leftW-2), leftW, panelH, leftActive)
+		left = panel("Images", m.imageListBody(panelContentWidth(leftW)), leftW, panelH, leftActive)
 		right = panel("Image", m.imageDetail(), rightW, panelH, rightActive)
 	case tabVolumes:
-		left = panel("Volumes", m.volumeListBody(leftW-2), leftW, panelH, leftActive)
+		left = panel("Volumes", m.volumeListBody(panelContentWidth(leftW)), leftW, panelH, leftActive)
 		right = panel("Volume", m.volumeDetail(), rightW, panelH, rightActive)
 	case tabNetworks:
-		left = panel("Networks", m.networkListBody(leftW-2), leftW, panelH, leftActive)
+		left = panel("Networks", m.networkListBody(panelContentWidth(leftW)), leftW, panelH, leftActive)
 		right = panel("Network", m.networkDetail(), rightW, panelH, rightActive)
 	default:
-		left = panel(m.listTitle(), m.listBody(leftW-2), leftW, panelH, leftActive)
+		left = panel(m.listTitle(), m.listBody(panelContentWidth(leftW)), leftW, panelH, leftActive)
 		right = panel(m.rightTitle(), m.rightBody(), rightW, panelH, rightActive)
 	}
 
-	view := m.tabStrip() + "\n" +
-		lipgloss.JoinHorizontal(lipgloss.Top, left, right) + "\n" +
-		m.bottomBar()
+	panelRow := lipgloss.JoinHorizontal(lipgloss.Top, left, strings.Repeat(" ", m.panelGap()), right)
+	view := m.tabStrip() + strings.Repeat("\n", 1+m.tabPanelGap()) +
+		panelRow + "\n" +
+		m.fittedBottomBar()
 
 	if m.helpOpen {
 		box := m.helpBox()
-		x := max(0, (m.width-lipgloss.Width(box))/2)
-		y := max(0, (m.height-lipgloss.Height(box))/2)
+		width, height := m.contentSize()
+		x := max(0, (width-lipgloss.Width(box))/2)
+		y := max(0, (height-lipgloss.Height(box))/2)
 		view = overlay(view, box, x, y)
 	}
-	return view
+	return m.insetView(view)
 }

@@ -89,9 +89,10 @@ Want to try it without touching your real containers? Run `bosun --demo` for a s
 | `s` | start |
 | `x` | stop |
 | `r` | restart |
-| `d` | remove container or image, asks first |
+| `d` | remove the selected container, image, volume, or network, asks first |
 | `p` | prune dangling images (images view) |
 | `esc` | back to the details view |
+| `T` | cycle color themes |
 | `?` | show the keybindings |
 | `q` | quit |
 
