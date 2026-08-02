@@ -194,6 +194,102 @@ func TestFocusOnlyMovesToInteractiveRightViews(t *testing.T) {
 	}
 }
 
+func TestMouseMomentumStaysWithLogPaneAfterFocusSwitch(t *testing.T) {
+	m := New(nil)
+	m.width = 120
+	m.height = 40
+	m.loaded = true
+	m.containers = []docker.Container{
+		{Name: "one"}, {Name: "two"}, {Name: "three"}, {Name: "four"}, {Name: "five"},
+	}
+	m.cursor = 3
+	m.right = viewLogs
+	m.focusRight = false
+	m.vp.Width = 40
+	m.vp.Height = 3
+	m.vp.SetContent(strings.Repeat("line\n", 20))
+	m.vp.GotoBottom()
+	beforeOffset := m.vp.YOffset
+
+	m = send(m, tea.MouseMsg{
+		X:      100,
+		Y:      10,
+		Button: tea.MouseButtonWheelUp,
+		Action: tea.MouseActionPress,
+	})
+
+	if m.cursor != 3 {
+		t.Fatalf("right-pane wheel moved container cursor: got %d, want 3", m.cursor)
+	}
+	if m.vp.YOffset >= beforeOffset {
+		t.Fatalf("right-pane wheel did not scroll logs: before=%d after=%d", beforeOffset, m.vp.YOffset)
+	}
+}
+
+func TestMouseWheelOnlyMovesListWhenPointerIsOverLeftPane(t *testing.T) {
+	m := New(nil)
+	m.width = 120
+	m.height = 40
+	m.loaded = true
+	m.containers = []docker.Container{{Name: "one"}, {Name: "two"}, {Name: "three"}}
+
+	m = send(m, tea.MouseMsg{
+		X:      10,
+		Y:      10,
+		Button: tea.MouseButtonWheelDown,
+		Action: tea.MouseActionPress,
+	})
+	if m.cursor != 1 {
+		t.Fatalf("left-pane wheel cursor = %d, want 1", m.cursor)
+	}
+
+	m.right = viewDetails
+	m = send(m, tea.MouseMsg{
+		X:      100,
+		Y:      10,
+		Button: tea.MouseButtonWheelDown,
+		Action: tea.MouseActionPress,
+	})
+	if m.cursor != 1 {
+		t.Fatalf("right-pane momentum leaked into list: got %d, want 1", m.cursor)
+	}
+}
+
+func TestMouseClicksTabsRowsAndInteractivePane(t *testing.T) {
+	m := New(nil)
+	m.width = 120
+	m.height = 40
+	m.loaded = true
+	m.containers = []docker.Container{{Name: "one"}, {Name: "two"}, {Name: "three"}}
+	m.images = []docker.Image{{Repo: "first"}, {Repo: "second"}}
+	m.imagesLoaded = true
+
+	// Images begins after the leading space, Containers, and the five-cell separator.
+	m = send(m, tea.MouseMsg{X: 17, Y: 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	if m.tab != tabImages {
+		t.Fatalf("clicking Images tab selected %v", m.tab)
+	}
+
+	// At this size the panel begins at y=3 and its first body row is y=4.
+	m = send(m, tea.MouseMsg{X: 10, Y: 5, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	if m.imgCursor != 1 {
+		t.Fatalf("clicking second image row selected %d", m.imgCursor)
+	}
+
+	m.tab = tabContainers
+	m.right = viewLogs
+	m.focusRight = false
+	m = send(m, tea.MouseMsg{X: 100, Y: 10, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	if !m.focusRight {
+		t.Fatal("clicking logs pane should focus it")
+	}
+
+	m = send(m, tea.MouseMsg{X: 10, Y: 6, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	if m.cursor != 2 || m.focusRight || m.right != viewDetails {
+		t.Fatalf("clicking third container row did not select it cleanly: cursor=%d focusRight=%v right=%v", m.cursor, m.focusRight, m.right)
+	}
+}
+
 func TestStateGlyphsDoNotRelyOnColor(t *testing.T) {
 	if got := stateGlyph(docker.Container{State: "running"}); got != "●" {
 		t.Fatalf("running glyph = %q", got)

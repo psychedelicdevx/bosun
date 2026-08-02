@@ -40,7 +40,7 @@ func main() {
 		engine = client
 	}
 
-	p := tea.NewProgram(ui.New(engine), tea.WithAltScreen())
+	p := tea.NewProgram(ui.New(engine), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "bosun: %v\n", err)
 		os.Exit(1)

@@ -281,10 +281,160 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.setStatus("exec " + msg.name + " failed: " + msg.err.Error())
 		}
 		return m, tea.Batch(m.setStatus("left shell: "+msg.name), m.requestRefresh())
+	case tea.MouseMsg:
+		return m.handleMouse(msg)
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
 	return m, nil
+}
+
+func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if m.helpOpen || m.confirming || m.filtering || m.logFiltering {
+		return m, nil
+	}
+
+	horizontal, vertical := m.insets()
+	leftW, rightW, panelH := m.dims()
+	rightStart := horizontal + leftW + m.panelGap()
+	panelStart := vertical + 1 + m.tabPanelGap()
+
+	if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
+		if msg.Y == vertical {
+			return m.clickTab(msg.X, horizontal), nil
+		}
+		if msg.Y < panelStart || msg.Y >= panelStart+panelH {
+			return m, nil
+		}
+		if msg.X >= horizontal && msg.X < horizontal+leftW {
+			m.focusRight = false
+			bodyRow := msg.Y - panelStart - 1
+			if bodyRow >= 0 && bodyRow < panelH-2 {
+				m = m.selectVisibleRow(bodyRow, panelH-2)
+			}
+			return m, nil
+		}
+		if msg.X >= rightStart && msg.X < rightStart+rightW && m.tab == tabContainers && m.right != viewDetails {
+			m.focusRight = true
+		}
+		return m, nil
+	}
+
+	if !tea.MouseEvent(msg).IsWheel() {
+		return m, nil
+	}
+	if msg.Y < panelStart || msg.Y >= panelStart+panelH {
+		return m, nil
+	}
+
+	if msg.X >= rightStart {
+		if m.tab == tabContainers && m.right == viewLogs {
+			var cmd tea.Cmd
+			m.vp, cmd = m.vp.Update(msg)
+			return m, cmd
+		}
+		return m, nil
+	}
+
+	if msg.X < horizontal || msg.X >= horizontal+leftW {
+		return m, nil
+	}
+	switch msg.Button {
+	case tea.MouseButtonWheelUp:
+		return m.moveListCursor(-1), nil
+	case tea.MouseButtonWheelDown:
+		return m.moveListCursor(1), nil
+	default:
+		return m, nil
+	}
+}
+
+func (m Model) moveListCursor(delta int) Model {
+	switch m.tab {
+	case tabImages:
+		m.imgCursor = clampIndex(m.imgCursor+delta, len(m.images))
+	case tabVolumes:
+		m.volCursor = clampIndex(m.volCursor+delta, len(m.volumes))
+	case tabNetworks:
+		m.netCursor = clampIndex(m.netCursor+delta, len(m.networks))
+	default:
+		rows := m.rows()
+		if len(rows) > 0 {
+			m.toDetails()
+			m.cursor = clampIndex(m.cursor+delta, len(rows))
+		}
+	}
+	return m
+}
+
+func (m Model) clickTab(x, horizontal int) Model {
+	labels := []struct {
+		name string
+		tab  tab
+	}{
+		{"Containers", tabContainers},
+		{"Images", tabImages},
+		{"Volumes", tabVolumes},
+		{"Networks", tabNetworks},
+	}
+	start := horizontal + 1
+	for _, label := range labels {
+		end := start + len(label.name)
+		if x >= start && x < end {
+			if label.tab != tabContainers {
+				m.toDetails()
+			}
+			m.tab = label.tab
+			m.focusRight = false
+			return m
+		}
+		start = end + 5 // width of "  ·  "
+	}
+	return m
+}
+
+func (m Model) selectVisibleRow(bodyRow, height int) Model {
+	switch m.tab {
+	case tabImages:
+		if m.imagesErr != nil && len(m.images) > 0 {
+			bodyRow--
+			height--
+		}
+		start, end := windowRange(len(m.images), m.imgCursor, height)
+		if index := start + bodyRow; bodyRow >= 0 && index < end {
+			m.imgCursor = index
+		}
+	case tabVolumes:
+		if m.volumesErr != nil && len(m.volumes) > 0 {
+			bodyRow--
+			height--
+		}
+		start, end := windowRange(len(m.volumes), m.volCursor, height)
+		if index := start + bodyRow; bodyRow >= 0 && index < end {
+			m.volCursor = index
+		}
+	case tabNetworks:
+		if m.networksErr != nil && len(m.networks) > 0 {
+			bodyRow--
+			height--
+		}
+		start, end := windowRange(len(m.networks), m.netCursor, height)
+		if index := start + bodyRow; bodyRow >= 0 && index < end {
+			m.netCursor = index
+		}
+	default:
+		rows := m.rows()
+		if m.containerErr != nil && len(rows) > 0 {
+			bodyRow--
+			height--
+		}
+		start, end := windowRange(len(rows), m.cursor, height)
+		if index := start + bodyRow; bodyRow >= 0 && index < end {
+			m.toDetails()
+			m.cursor = index
+		}
+	}
+	return m
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
