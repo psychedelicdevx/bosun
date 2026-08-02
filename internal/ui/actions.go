@@ -29,43 +29,35 @@ var gerund = map[string]string{
 	"restart": "restarting",
 }
 
+func runContainerAction(client Engine, verb, id string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
+	defer cancel()
+	switch verb {
+	case "start":
+		return client.Start(ctx, id)
+	case "stop":
+		return client.Stop(ctx, id)
+	case "restart":
+		return client.Restart(ctx, id)
+	case "remove":
+		return client.Remove(ctx, id)
+	}
+	return nil
+}
+
 func (m Model) doAction(verb, id, name string) tea.Cmd {
 	client := m.client
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
-		defer cancel()
-		var err error
-		switch verb {
-		case "start":
-			err = client.Start(ctx, id)
-		case "stop":
-			err = client.Stop(ctx, id)
-		case "restart":
-			err = client.Restart(ctx, id)
-		case "remove":
-			err = client.Remove(ctx, id)
-		}
-		return actionDoneMsg{verb, name, err}
+		return actionDoneMsg{verb, name, runContainerAction(client, verb, id)}
 	}
 }
 
 func (m Model) stackAction(verb, project string, ids []string) tea.Cmd {
 	client := m.client
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
-		defer cancel()
 		var err error
 		for _, id := range ids {
-			var e error
-			switch verb {
-			case "start":
-				e = client.Start(ctx, id)
-			case "stop":
-				e = client.Stop(ctx, id)
-			case "restart":
-				e = client.Restart(ctx, id)
-			}
-			if e != nil && err == nil {
+			if e := runContainerAction(client, verb, id); e != nil && err == nil {
 				err = e
 			}
 		}
