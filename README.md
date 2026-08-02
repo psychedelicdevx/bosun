@@ -10,6 +10,8 @@ I spend half my day in `docker ps`, `docker logs -f`, `docker exec`, over and ov
 
 It is not trying to replace Docker Desktop. It is a fast keyboard cockpit for the containers you already have running.
 
+Wondering how it stacks up against lazydocker, ctop, oxker, or dozzle? There is an honest [comparison](COMPARISON.md).
+
 ## Install
 
 You need a running Docker daemon. That is it for the Homebrew route.
