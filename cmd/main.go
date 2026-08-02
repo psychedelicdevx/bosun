@@ -51,14 +51,13 @@ func connectDocker() (*docker.Client, error) {
 	if h := flagValue("--host", ""); h != "" {
 		return docker.NewWithHost(h)
 	}
-	if os.Getenv("DOCKER_HOST") != "" {
+	if h := os.Getenv("DOCKER_HOST"); h != "" {
+		if strings.HasPrefix(h, "ssh://") {
+			return docker.NewWithHost(h)
+		}
 		return docker.New()
 	}
 	if h := docker.ContextHost(); h != "" {
-		if strings.HasPrefix(h, "ssh://") {
-			fmt.Fprintf(os.Stderr, "bosun: docker context points at %s; ssh endpoints are not supported yet, using the default socket. set DOCKER_HOST to a tcp:// endpoint for a remote daemon.\n", h)
-			return docker.New()
-		}
 		return docker.NewWithHost(h)
 	}
 	return docker.New()
