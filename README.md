@@ -50,10 +50,11 @@ It connects to your local daemon through the usual socket, lists every container
 You can point it at another daemon. bosun follows your active `docker context`, so if you have run `docker context use` it connects there without any extra setup. `DOCKER_HOST` overrides that, and a `--host` flag overrides everything:
 
 ```bash
+bosun --host ssh://you@server
 bosun --host tcp://10.0.0.5:2375
 ```
 
-`tcp://` and `unix://` endpoints work today. `ssh://` contexts are not wired up yet, so for an SSH-reachable daemon expose it over `tcp://` (or open a tunnel) and point `DOCKER_HOST` or `--host` at that.
+`unix://`, `tcp://`, and `ssh://` endpoints all work. For ssh, bosun shells out to your own `ssh`, so it honors your keys, agent, and `~/.ssh/config` exactly like `ssh you@server` does. Nothing to configure in bosun. The remote just needs the `docker` CLI on its PATH, which it has wherever Docker is installed.
 
 ### Podman
 
@@ -122,7 +123,7 @@ The whole thing is one static binary. Under the hood:
 
 ## Status
 
-Usable every day. Containers, images, volumes, and networks, compose grouping with stack-level actions, live logs with filter and copy, stats, shell exec, the lifecycle actions, and a name filter all work, against Docker or Podman, local or remote. Next on the bench: `ssh://` context support and live refresh through the Docker events API instead of polling.
+Usable every day. Containers, images, volumes, and networks, compose grouping with stack-level actions, live logs with filter and copy, stats, shell exec, the lifecycle actions, and a name filter all work, against Docker or Podman, local or remote over `ssh://`. Next on the bench: live refresh through the Docker events API instead of polling.
 
 Issues and pull requests are welcome.
 

@@ -23,7 +23,7 @@ If you want the shortest version: bosun is a fast, keyboard first TUI that cover
 | Shell into container | yes | yes | yes | no | no |
 | Podman | yes | no | no | no | yes |
 | Remote over tcp / unix | yes | yes | no | limited | yes |
-| Remote over ssh | not yet | yes | no | no | yes |
+| Remote over ssh | yes | yes | no | no | yes |
 | Follows `docker context` | yes | yes | no | no | partial |
 | Themes | 10 | limited | no | limited | yes |
 | Single static binary | yes | yes | yes | yes | no, runs a server |
@@ -50,7 +50,6 @@ If you want the shortest version: bosun is a fast, keyboard first TUI that cover
 ## Where lazydocker still wins
 
 - Volume sizes, ASCII stats graphs over time, and user defined custom commands.
-- `ssh://` remote contexts out of the box. bosun handles tcp and unix endpoints today; for an ssh reachable daemon you expose it over tcp or open a tunnel.
 - Six years of maturity, a huge community, and packaging everywhere.
 
 ## When to pick which
