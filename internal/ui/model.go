@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -26,11 +27,14 @@ const (
 )
 
 type Model struct {
-	client     Engine
-	containers []docker.Container
-	cursor     int
-	loaded     bool
-	err        error
+	client         Engine
+	containers     []docker.Container
+	cursor         int
+	loaded         bool
+	err            error
+	containerErr   error
+	refreshing     bool
+	refreshPending bool
 
 	right      rightView
 	focusRight bool
@@ -43,20 +47,28 @@ type Model struct {
 	logGen       int
 	logFilter    string
 	logFiltering bool
+	logEnded     bool
 
 	stats       docker.Stats
 	haveStats   bool
 	statsChan   <-chan docker.Stats
 	statsCancel context.CancelFunc
 	statsGen    int
+	statsEnded  bool
 
-	tab       tab
-	images    []docker.Image
-	imgCursor int
-	volumes   []docker.Volume
-	volCursor int
-	networks  []docker.Network
-	netCursor int
+	tab            tab
+	images         []docker.Image
+	imgCursor      int
+	imagesLoaded   bool
+	imagesErr      error
+	volumes        []docker.Volume
+	volCursor      int
+	volumesLoaded  bool
+	volumesErr     error
+	networks       []docker.Network
+	netCursor      int
+	networksLoaded bool
+	networksErr    error
 
 	status      string
 	statusGen   int
@@ -64,6 +76,7 @@ type Model struct {
 	pendingKind string
 	pendingID   string
 	pendingName string
+	busy        bool
 
 	filter    string
 	filtering bool
@@ -77,10 +90,11 @@ type Model struct {
 
 func New(client Engine) Model {
 	return Model{
-		client:    client,
-		vp:        viewport.New(80, 20),
-		collapsed: map[string]bool{},
-		themeIdx:  themeIndex(CurrentTheme),
+		client:     client,
+		vp:         viewport.New(80, 20),
+		collapsed:  map[string]bool{},
+		themeIdx:   themeIndex(CurrentTheme),
+		refreshing: true,
 	}
 }
 
@@ -142,16 +156,8 @@ func (m *Model) clampCursor() {
 	}
 }
 
-func (m Model) fetch() tea.Msg {
-	list, err := m.client.List(context.Background())
-	if err != nil {
-		return errMsg{err}
-	}
-	return containersMsg(list)
-}
-
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.fetch, m.fetchImages, m.fetchVolumes, m.fetchNetworks, tick())
+	return tea.Batch(m.refreshAll, tick())
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -163,31 +169,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.vp.Height = max(1, panelH-2)
 		return m, nil
 	case tickMsg:
-		return m, tea.Batch(m.fetch, m.fetchImages, m.fetchVolumes, m.fetchNetworks, tick())
+		return m, tea.Batch(m.beginRefresh(), tick())
+	case refreshMsg:
+		m.applyRefresh(msg)
+		if m.refreshPending {
+			m.refreshPending = false
+			return m, m.beginRefresh()
+		}
+		return m, nil
 	case imagesMsg:
 		m.images = msg
+		m.imagesLoaded = true
+		m.imagesErr = nil
 		if m.imgCursor > len(m.images)-1 {
 			m.imgCursor = max(0, len(m.images)-1)
 		}
 		return m, nil
 	case volumesMsg:
 		m.volumes = msg
+		m.volumesLoaded = true
+		m.volumesErr = nil
 		if m.volCursor > len(m.volumes)-1 {
 			m.volCursor = max(0, len(m.volumes)-1)
 		}
 		return m, nil
 	case networksMsg:
 		m.networks = msg
+		m.networksLoaded = true
+		m.networksErr = nil
 		if m.netCursor > len(m.networks)-1 {
 			m.netCursor = max(0, len(m.networks)-1)
 		}
 		return m, nil
 	case resourceDoneMsg:
+		m.busy = false
 		if msg.err != nil {
 			return m, m.setStatus(msg.verb + " " + msg.name + " failed: " + msg.err.Error())
 		}
-		return m, tea.Batch(m.setStatus(msg.verb+" "+msg.name), m.fetchVolumes, m.fetchNetworks)
+		return m, tea.Batch(m.setStatus(msg.verb+" "+msg.name), m.requestRefresh())
 	case imageDoneMsg:
+		m.busy = false
 		if msg.err != nil {
 			return m, m.setStatus(msg.verb + " failed: " + msg.err.Error())
 		}
@@ -195,18 +216,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.verb == "pruned" {
 			status = "pruned dangling images, freed " + humanBytes(msg.reclaimed)
 		}
-		return m, tea.Batch(m.setStatus(status), m.fetchImages)
+		return m, tea.Batch(m.setStatus(status), m.requestRefresh())
 	case containersMsg:
 		m.containers = msg
 		m.loaded = true
+		m.err = nil
+		m.containerErr = nil
 		m.clampCursor()
 		return m, nil
 	case errMsg:
-		m.err = msg.err
-		m.loaded = true
+		m.containerErr = msg.err
+		if !m.loaded {
+			m.err = msg.err
+		}
 		return m, nil
 	case statusClearMsg:
-		if msg.gen == m.statusGen {
+		if msg.gen == m.statusGen && !m.busy {
 			m.status = ""
 		}
 		return m, nil
@@ -214,18 +239,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.gen != m.logGen {
 			return m, nil
 		}
-		atBottom := m.vp.AtBottom()
-		m.logLines = append(m.logLines, msg.line)
-		if len(m.logLines) > logBufferMax+logBufferSlack {
-			m.logLines = append([]string(nil), m.logLines[len(m.logLines)-logBufferMax:]...)
+		m.appendLogLines([]string{msg.line})
+		return m, waitForLog(m.logGen, m.logChan)
+	case logLinesMsg:
+		if msg.gen != m.logGen {
+			return m, nil
 		}
-		m.vp.SetContent(strings.Join(m.renderedLogLines(), "\n"))
-		if atBottom {
-			m.vp.GotoBottom()
+		m.appendLogLines(msg.lines)
+		if msg.closed {
+			m.logCancel = nil
+			m.logEnded = true
+			return m, m.setStatus("log stream ended; enter reconnects")
 		}
 		return m, waitForLog(m.logGen, m.logChan)
 	case logClosedMsg:
-		return m, nil
+		if msg.gen != m.logGen || m.right != viewLogs {
+			return m, nil
+		}
+		m.logCancel = nil
+		m.logEnded = true
+		return m, m.setStatus("log stream ended; enter reconnects")
 	case statsMsg:
 		if msg.gen != m.statsGen {
 			return m, nil
@@ -234,14 +267,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.haveStats = true
 		return m, waitForStats(m.statsGen, m.statsChan)
 	case statsClosedMsg:
-		return m, nil
+		if msg.gen != m.statsGen || m.right != viewStats {
+			return m, nil
+		}
+		m.statsCancel = nil
+		m.statsEnded = true
+		return m, m.setStatus("stats stream ended; enter reconnects")
 	case actionDoneMsg:
-		return m, tea.Batch(m.setStatus(actionStatus(msg)), m.fetch)
+		m.busy = false
+		return m, tea.Batch(m.setStatus(actionStatus(msg)), m.requestRefresh())
 	case execDoneMsg:
 		if msg.err != nil {
 			return m, m.setStatus("exec " + msg.name + " failed: " + msg.err.Error())
 		}
-		return m, tea.Batch(m.setStatus("left shell: "+msg.name), m.fetch)
+		return m, tea.Batch(m.setStatus("left shell: "+msg.name), m.requestRefresh())
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -266,7 +305,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.confirming = false
 			kind, id, name := m.pendingKind, m.pendingID, m.pendingName
 			m.pendingKind = ""
+			m.busy = true
 			switch kind {
+			case "prune":
+				return m, tea.Batch(m.setStatus("pruning dangling images..."), m.pruneImages())
 			case "image":
 				return m, tea.Batch(m.setStatus("removing image "+name+"..."), m.removeImage(id, name))
 			case "volume":
@@ -300,7 +342,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.helpOpen = true
 		return m, nil
 	case "tab":
-		m.focusRight = !m.focusRight
+		if m.tab == tabContainers && m.right != viewDetails {
+			m.focusRight = !m.focusRight
+		}
 		return m, nil
 	case "1":
 		m.tab = tabContainers
@@ -361,9 +405,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if msg.String() == "y" {
 			return m.copyLogs()
 		}
+		if msg.String() == "enter" && m.logEnded {
+			return m.openLogs()
+		}
 		var cmd tea.Cmd
 		m.vp, cmd = m.vp.Update(msg)
 		return m, cmd
+	}
+	if m.focusRight && m.right == viewStats {
+		if msg.String() == "enter" && m.statsEnded {
+			return m.openStats()
+		}
+		return m, nil
 	}
 
 	if m.tab == tabImages {
@@ -411,20 +464,28 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, execShell(ct.ID, ct.Name)
 	case "s", "x", "r":
+		if m.busy {
+			return m, nil
+		}
 		verb := map[string]string{"s": "start", "x": "stop", "r": "restart"}[msg.String()]
 		if r, ok := m.currentRow(); ok && r.header {
 			ids := m.projectContainerIDs(r.project)
 			if len(ids) == 0 {
 				return m, nil
 			}
+			m.busy = true
 			return m, tea.Batch(m.setStatus(gerund[verb]+" "+r.project+" stack..."), m.stackAction(verb, r.project, ids))
 		}
 		ct, ok := m.selected()
 		if !ok {
 			return m, nil
 		}
+		m.busy = true
 		return m, tea.Batch(m.setStatus(gerund[verb]+" "+ct.Name+"..."), m.doAction(verb, ct.ID, ct.Name))
 	case "d":
+		if m.busy {
+			return m, nil
+		}
 		ct, ok := m.selected()
 		if !ok {
 			return m, nil
@@ -445,10 +506,8 @@ func (m Model) updateFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filter = ""
 		m.cursor = 0
 	case tea.KeyBackspace:
-		if len(m.filter) > 0 {
-			m.filter = m.filter[:len(m.filter)-1]
-			m.cursor = 0
-		}
+		m.filter = removeLastRune(m.filter)
+		m.cursor = 0
 	case tea.KeySpace:
 		m.filter += " "
 		m.cursor = 0
@@ -464,6 +523,7 @@ func (m Model) openLogs() (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
+	m.stopLogs()
 	m.stopStats()
 	m.logGen++
 	ctx, cancel := context.WithCancel(context.Background())
@@ -477,6 +537,7 @@ func (m Model) openLogs() (tea.Model, tea.Cmd) {
 	m.logLines = nil
 	m.logFilter = ""
 	m.logFiltering = false
+	m.logEnded = false
 	m.vp.SetContent("")
 	m.vp.GotoTop()
 	m.right = viewLogs
@@ -492,6 +553,7 @@ func (m Model) openStats() (tea.Model, tea.Cmd) {
 	if ct.State != "running" {
 		return m, m.setStatus(ct.Name + " is not running")
 	}
+	m.stopStats()
 	m.stopLogs()
 	m.statsGen++
 	ctx, cancel := context.WithCancel(context.Background())
@@ -503,9 +565,33 @@ func (m Model) openStats() (tea.Model, tea.Cmd) {
 	m.statsCancel = cancel
 	m.statsChan = ch
 	m.haveStats = false
+	m.statsEnded = false
 	m.right = viewStats
 	m.focusRight = true
 	return m, waitForStats(m.statsGen, ch)
+}
+
+func (m *Model) appendLogLines(lines []string) {
+	if len(lines) == 0 {
+		return
+	}
+	atBottom := m.vp.AtBottom()
+	m.logLines = append(m.logLines, lines...)
+	if len(m.logLines) > logBufferMax+logBufferSlack {
+		m.logLines = append([]string(nil), m.logLines[len(m.logLines)-logBufferMax:]...)
+	}
+	m.vp.SetContent(strings.Join(m.renderedLogLines(), "\n"))
+	if atBottom {
+		m.vp.GotoBottom()
+	}
+}
+
+func removeLastRune(s string) string {
+	if s == "" {
+		return s
+	}
+	_, size := utf8.DecodeLastRuneInString(s)
+	return s[:len(s)-size]
 }
 
 func (m Model) View() string {
@@ -514,7 +600,7 @@ func (m Model) View() string {
 	}
 	if m.err != nil {
 		width, height := m.contentSize()
-		view := panel("Error", "cannot reach docker:\n\n"+m.err.Error(), width, height-1, true) +
+		view := panel("Error", "cannot reach container engine:\n\n"+m.err.Error(), width, height-1, true) +
 			"\n" + hintStyle.Render(" q quit")
 		return m.insetView(view)
 	}
@@ -522,19 +608,20 @@ func (m Model) View() string {
 
 	leftActive := !m.focusRight && !m.helpOpen
 	rightActive := m.focusRight && !m.helpOpen
+	bodyHeight := max(1, panelH-2)
 	var left, right string
 	switch m.tab {
 	case tabImages:
-		left = panel("Images", m.imageListBody(panelContentWidth(leftW)), leftW, panelH, leftActive)
+		left = panel("Images", m.imageListBody(panelContentWidth(leftW), bodyHeight), leftW, panelH, leftActive)
 		right = panel("Image", m.imageDetail(), rightW, panelH, rightActive)
 	case tabVolumes:
-		left = panel("Volumes", m.volumeListBody(panelContentWidth(leftW)), leftW, panelH, leftActive)
+		left = panel("Volumes", m.volumeListBody(panelContentWidth(leftW), bodyHeight), leftW, panelH, leftActive)
 		right = panel("Volume", m.volumeDetail(), rightW, panelH, rightActive)
 	case tabNetworks:
-		left = panel("Networks", m.networkListBody(panelContentWidth(leftW)), leftW, panelH, leftActive)
+		left = panel("Networks", m.networkListBody(panelContentWidth(leftW), bodyHeight), leftW, panelH, leftActive)
 		right = panel("Network", m.networkDetail(), rightW, panelH, rightActive)
 	default:
-		left = panel(m.listTitle(), m.listBody(panelContentWidth(leftW)), leftW, panelH, leftActive)
+		left = panel(m.listTitle(), m.listBody(panelContentWidth(leftW), bodyHeight), leftW, panelH, leftActive)
 		right = panel(m.rightTitle(), m.rightBody(), rightW, panelH, rightActive)
 	}
 

@@ -107,9 +107,11 @@ func TestFilterMatchesAndSelects(t *testing.T) {
 
 func TestLogBufferCapped(t *testing.T) {
 	m := New(nil)
-	for i := 0; i < logBufferMax+logBufferSlack+2000; i++ {
-		m = send(m, logLineMsg{gen: 0, line: "line"})
+	lines := make([]string, logBufferMax+logBufferSlack+2000)
+	for i := range lines {
+		lines[i] = "line"
 	}
+	m.appendLogLines(lines)
 	if len(m.logLines) > logBufferMax+logBufferSlack {
 		t.Fatalf("log buffer unbounded: got %d, want <= %d", len(m.logLines), logBufferMax+logBufferSlack)
 	}
@@ -159,7 +161,7 @@ func TestImageRemoveNeedsConfirm(t *testing.T) {
 	}
 
 	m = send(m, key("d"))
-	if !m.confirming || m.pendingKind != "image" || m.pendingName != "nginx:1.27" {
+	if !m.confirming || m.pendingKind != "image" || m.pendingName != "nginx:1.27 (abc)" {
 		t.Fatalf("d should arm image confirm, got confirming=%v kind=%q name=%q", m.confirming, m.pendingKind, m.pendingName)
 	}
 
@@ -187,6 +189,7 @@ func TestStackActionOnHeader(t *testing.T) {
 	if m.status != "stopping shop stack..." {
 		t.Fatalf("x on a header should act on the stack, got status %q", m.status)
 	}
+	m = send(m, actionDoneMsg{verb: "stop", name: "shop stack"})
 
 	m = send(m, key("s"))
 	if m.status != "starting shop stack..." {

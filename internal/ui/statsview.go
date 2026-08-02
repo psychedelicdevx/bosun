@@ -29,6 +29,7 @@ func (m *Model) stopStats() {
 	if m.statsCancel != nil {
 		m.statsCancel()
 		m.statsCancel = nil
+		m.statsGen++
 	}
 }
 

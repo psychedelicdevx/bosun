@@ -74,6 +74,20 @@ func stateStyle(ct docker.Container) lipgloss.Style {
 	return stoppedStyle
 }
 
+func stateGlyph(ct docker.Container) string {
+	switch ct.State {
+	case "running":
+		return "●"
+	case "exited", "dead":
+		if strings.HasPrefix(ct.Status, "Exited (0)") {
+			return "○"
+		}
+		return "×"
+	default:
+		return "·"
+	}
+}
+
 func (m Model) dims() (leftW, rightW, panelH int) {
 	width, height := m.contentSize()
 	gap := m.panelGap()
@@ -133,19 +147,34 @@ func (m Model) listTitle() string {
 	return "Containers"
 }
 
-func (m Model) listBody(inner int) string {
+func (m Model) listBody(inner, height int) string {
 	if !m.loaded {
 		return "loading..."
 	}
 	rs := m.rows()
+	banner := resourceBanner(m.containerErr, len(rs) > 0)
 	if len(rs) == 0 {
+		if banner != "" {
+			return banner
+		}
 		if m.filter != "" || m.filtering {
 			return hintStyle.Render("no match")
 		}
 		return hintStyle.Render("no containers")
 	}
+	if banner != "" {
+		if height <= 1 {
+			return banner
+		}
+		height--
+	}
+	start, end := windowRange(len(rs), m.cursor, height)
 	var b strings.Builder
-	for i, r := range rs {
+	if banner != "" {
+		b.WriteString(banner + "\n")
+	}
+	for i := start; i < end; i++ {
+		r := rs[i]
 		if i == m.cursor {
 			b.WriteString(highlightRow(r, m.collapsed[r.project], inner))
 		} else if r.header {
@@ -155,13 +184,34 @@ func (m Model) listBody(inner int) string {
 			}
 			b.WriteString(groupStyle.Render(chevron + " " + r.project))
 		} else {
-			b.WriteString("    " + stateStyle(r.ct).Render("●") + " " + r.ct.Name)
+			b.WriteString("    " + stateStyle(r.ct).Render(stateGlyph(r.ct)) + " " + r.ct.Name)
 		}
-		if i < len(rs)-1 {
+		if i < end-1 {
 			b.WriteString("\n")
 		}
 	}
 	return b.String()
+}
+
+func windowRange(total, cursor, height int) (start, end int) {
+	if total <= 0 || height <= 0 {
+		return 0, 0
+	}
+	height = min(height, total)
+	cursor = clampIndex(cursor, total)
+	start = max(0, cursor-height+1)
+	end = min(total, start+height)
+	return start, end
+}
+
+func resourceBanner(err error, hasData bool) string {
+	if err == nil {
+		return ""
+	}
+	if hasData {
+		return warningStyle.Render("refresh failed; showing cached data")
+	}
+	return erroredStyle.Render("refresh failed") + "\n" + hintStyle.Render(err.Error())
 }
 
 func highlightRow(r row, collapsed bool, inner int) string {
@@ -175,7 +225,7 @@ func highlightRow(r row, collapsed bool, inner int) string {
 	}
 
 	indent := selRowStyle.Render("    ")
-	dot := stateStyle(r.ct).Background(selectionBg).Render("●")
+	dot := stateStyle(r.ct).Background(selectionBg).Render(stateGlyph(r.ct))
 	name := selRowStyle.Render(" " + r.ct.Name)
 	return fillSelection(indent+dot+name, inner)
 }
@@ -190,7 +240,7 @@ func fillSelection(line string, inner int) string {
 func detailsBody(ct docker.Container) string {
 	return fmt.Sprintf(
 		"%s %s\n\n%s  %s\n%s  %s\n%s  %s\n%s  %s",
-		stateStyle(ct).Render("●"), headerStyle.Render(ct.Name),
+		stateStyle(ct).Render(stateGlyph(ct)), headerStyle.Render(ct.Name),
 		labelStyle.Render("id    "), ct.ID,
 		labelStyle.Render("image "), ct.Image,
 		labelStyle.Render("state "), ct.State,
@@ -200,14 +250,21 @@ func detailsBody(ct docker.Container) string {
 
 func (m Model) statsBody() string {
 	if !m.haveStats {
+		if m.statsEnded {
+			return warningStyle.Render("stream ended before the first sample") + "\n" + hintStyle.Render("press enter to reconnect")
+		}
 		return hintStyle.Render("waiting for samples...")
 	}
-	return fmt.Sprintf(
+	body := fmt.Sprintf(
 		"%s  %6.2f%%\n%s  %6.2f%%\n\n%s  %s / %s",
 		labelStyle.Render("cpu"), m.stats.CPUPercent,
 		labelStyle.Render("mem"), m.stats.MemPercent,
 		labelStyle.Render("   "), humanBytes(m.stats.MemUsage), humanBytes(m.stats.MemLimit),
 	)
+	if m.statsEnded {
+		body += "\n\n" + warningStyle.Render("stream ended") + "  " + hintStyle.Render("enter reconnects")
+	}
+	return body
 }
 
 func (m Model) rightTitle() string {
@@ -217,9 +274,17 @@ func (m Model) rightTitle() string {
 	}
 	switch m.right {
 	case viewLogs:
-		return "Logs: " + name
+		title := "Logs: " + name
+		if m.logEnded {
+			title += " · ended"
+		}
+		return title
 	case viewStats:
-		return "Stats: " + name
+		title := "Stats: " + name
+		if m.statsEnded {
+			title += " · ended"
+		}
+		return title
 	default:
 		return "Details"
 	}
@@ -267,7 +332,11 @@ func (m Model) projectSummary(project string) string {
 
 func (m Model) bottomBar() string {
 	if m.confirming {
-		return " " + erroredStyle.Render("remove "+m.pendingName+"?") + "  " + shortcuts(
+		verb := "remove"
+		if m.pendingKind == "prune" {
+			verb = "prune"
+		}
+		return " " + erroredStyle.Render(verb+" "+m.pendingName+"?") + "  " + shortcuts(
 			shortcut{"y", "confirm"}, shortcut{"n", "cancel"},
 		)
 	}
@@ -281,6 +350,9 @@ func (m Model) bottomBar() string {
 		return hintStyle.Render(" " + m.status)
 	}
 	if m.focusRight && m.right == viewLogs {
+		if m.logEnded {
+			return " " + shortcuts(shortcut{"enter", "reconnect"}, shortcut{"y", "copy"}, shortcut{"esc", "back"}, shortcut{"?", "help"}, shortcut{"q", "quit"})
+		}
 		if m.logFilter != "" {
 			return " " + labelStyle.Render("log filter ") + m.logFilter + "   " + shortcuts(
 				shortcut{"/", "edit"}, shortcut{"esc", "clears"}, shortcut{"y", "copy"},
@@ -289,6 +361,12 @@ func (m Model) bottomBar() string {
 		return " " + shortcuts(
 			shortcut{"/", "filter logs"}, shortcut{"y", "copy"}, shortcut{"esc", "back"}, shortcut{"?", "help"}, shortcut{"q", "quit"},
 		)
+	}
+	if m.focusRight && m.right == viewStats {
+		if m.statsEnded {
+			return " " + shortcuts(shortcut{"enter", "reconnect"}, shortcut{"esc", "back"}, shortcut{"?", "help"}, shortcut{"q", "quit"})
+		}
+		return " " + shortcuts(shortcut{"esc", "back"}, shortcut{"?", "help"}, shortcut{"q", "quit"})
 	}
 	if m.filter != "" {
 		return " " + labelStyle.Render("filter ") + m.filter + "   " + shortcuts(shortcut{"esc", "clears"})

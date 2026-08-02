@@ -17,6 +17,12 @@ type logLineMsg struct {
 	line string
 }
 
+type logLinesMsg struct {
+	gen    int
+	lines  []string
+	closed bool
+}
+
 type logClosedMsg struct{ gen int }
 
 var (
@@ -46,7 +52,19 @@ func waitForLog(gen int, ch <-chan string) tea.Cmd {
 		if !ok {
 			return logClosedMsg{gen}
 		}
-		return logLineMsg{gen, line}
+		lines := []string{line}
+		for len(lines) < 256 {
+			select {
+			case next, open := <-ch:
+				if !open {
+					return logLinesMsg{gen: gen, lines: lines, closed: true}
+				}
+				lines = append(lines, next)
+			default:
+				return logLinesMsg{gen: gen, lines: lines}
+			}
+		}
+		return logLinesMsg{gen: gen, lines: lines}
 	}
 }
 
@@ -54,6 +72,7 @@ func (m *Model) stopLogs() {
 	if m.logCancel != nil {
 		m.logCancel()
 		m.logCancel = nil
+		m.logGen++
 	}
 }
 
@@ -172,9 +191,7 @@ func (m Model) updateLogFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.logFiltering = false
 		m.logFilter = ""
 	case tea.KeyBackspace:
-		if len(m.logFilter) > 0 {
-			m.logFilter = m.logFilter[:len(m.logFilter)-1]
-		}
+		m.logFilter = removeLastRune(m.logFilter)
 	case tea.KeySpace:
 		m.logFilter += " "
 	case tea.KeyRunes:

@@ -30,18 +30,12 @@ type imageDoneMsg struct {
 	err       error
 }
 
-func (m Model) fetchImages() tea.Msg {
-	list, err := m.client.Images(context.Background())
-	if err != nil {
-		return imagesMsg(nil)
-	}
-	return imagesMsg(list)
-}
-
 func (m Model) removeImage(id, name string) tea.Cmd {
 	client := m.client
 	return func() tea.Msg {
-		err := client.RemoveImage(context.Background(), id)
+		ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
+		defer cancel()
+		err := client.RemoveImage(ctx, id)
 		return imageDoneMsg{verb: "removed image", name: name, err: err}
 	}
 }
@@ -49,7 +43,9 @@ func (m Model) removeImage(id, name string) tea.Cmd {
 func (m Model) pruneImages() tea.Cmd {
 	client := m.client
 	return func() tea.Msg {
-		n, err := client.PruneImages(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
+		defer cancel()
+		n, err := client.PruneImages(ctx)
 		return imageDoneMsg{verb: "pruned", reclaimed: n, err: err}
 	}
 }
@@ -65,16 +61,21 @@ func (m Model) updateImages(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.imgCursor--
 		}
 	case "d":
-		if m.imgCursor >= len(m.images) {
+		if m.busy || m.imgCursor >= len(m.images) {
 			return m, nil
 		}
 		im := m.images[m.imgCursor]
 		m.confirming = true
 		m.pendingKind = "image"
 		m.pendingID = im.ID
-		m.pendingName = im.Repo
+		m.pendingName = im.Repo + " (" + im.ID + ")"
 	case "p":
-		return m, tea.Batch(m.setStatus("pruning dangling images..."), m.pruneImages())
+		if m.busy {
+			return m, nil
+		}
+		m.confirming = true
+		m.pendingKind = "prune"
+		m.pendingName = "dangling images"
 	}
 	return m, nil
 }
@@ -93,12 +94,30 @@ func (m Model) tabStrip() string {
 		sep + name("Networks", m.tab == tabNetworks)
 }
 
-func (m Model) imageListBody(inner int) string {
+func (m Model) imageListBody(inner, height int) string {
+	if !m.imagesLoaded {
+		return hintStyle.Render("loading...")
+	}
+	banner := resourceBanner(m.imagesErr, len(m.images) > 0)
 	if len(m.images) == 0 {
+		if banner != "" {
+			return banner
+		}
 		return hintStyle.Render("no images")
 	}
+	if banner != "" {
+		if height <= 1 {
+			return banner
+		}
+		height--
+	}
+	start, end := windowRange(len(m.images), m.imgCursor, height)
 	var b strings.Builder
-	for i, im := range m.images {
+	if banner != "" {
+		b.WriteString(banner + "\n")
+	}
+	for i := start; i < end; i++ {
+		im := m.images[i]
 		size := humanBytes(uint64(im.Size))
 		repo := im.Repo
 		gap := inner - lipgloss.Width(repo) - lipgloss.Width(size)
@@ -114,7 +133,7 @@ func (m Model) imageListBody(inner int) string {
 		default:
 			b.WriteString(repo + strings.Repeat(" ", gap) + hintStyle.Render(size))
 		}
-		if i < len(m.images)-1 {
+		if i < end-1 {
 			b.WriteString("\n")
 		}
 	}
@@ -122,6 +141,12 @@ func (m Model) imageListBody(inner int) string {
 }
 
 func (m Model) imageDetail() string {
+	if !m.imagesLoaded {
+		return hintStyle.Render("loading...")
+	}
+	if m.imagesErr != nil && len(m.images) == 0 {
+		return resourceBanner(m.imagesErr, false)
+	}
 	if m.imgCursor >= len(m.images) {
 		return hintStyle.Render("no image selected")
 	}

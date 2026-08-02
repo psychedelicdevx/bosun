@@ -3,9 +3,12 @@ package ui
 import (
 	"context"
 	"fmt"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+const actionTimeout = 30 * time.Second
 
 type actionDoneMsg struct {
 	verb string
@@ -29,7 +32,8 @@ var gerund = map[string]string{
 func (m Model) doAction(verb, id, name string) tea.Cmd {
 	client := m.client
 	return func() tea.Msg {
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
+		defer cancel()
 		var err error
 		switch verb {
 		case "start":
@@ -48,7 +52,8 @@ func (m Model) doAction(verb, id, name string) tea.Cmd {
 func (m Model) stackAction(verb, project string, ids []string) tea.Cmd {
 	client := m.client
 	return func() tea.Msg {
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
+		defer cancel()
 		var err error
 		for _, id := range ids {
 			var e error

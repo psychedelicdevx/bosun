@@ -19,26 +19,12 @@ type resourceDoneMsg struct {
 	err  error
 }
 
-func (m Model) fetchVolumes() tea.Msg {
-	list, err := m.client.Volumes(context.Background())
-	if err != nil {
-		return volumesMsg(nil)
-	}
-	return volumesMsg(list)
-}
-
-func (m Model) fetchNetworks() tea.Msg {
-	list, err := m.client.Networks(context.Background())
-	if err != nil {
-		return networksMsg(nil)
-	}
-	return networksMsg(list)
-}
-
 func (m Model) removeVolume(name string) tea.Cmd {
 	client := m.client
 	return func() tea.Msg {
-		err := client.RemoveVolume(context.Background(), name)
+		ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
+		defer cancel()
+		err := client.RemoveVolume(ctx, name)
 		return resourceDoneMsg{verb: "removed volume", name: name, err: err}
 	}
 }
@@ -46,7 +32,9 @@ func (m Model) removeVolume(name string) tea.Cmd {
 func (m Model) removeNetwork(id, name string) tea.Cmd {
 	client := m.client
 	return func() tea.Msg {
-		err := client.RemoveNetwork(context.Background(), id)
+		ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
+		defer cancel()
+		err := client.RemoveNetwork(ctx, id)
 		return resourceDoneMsg{verb: "removed network", name: name, err: err}
 	}
 }
@@ -62,7 +50,7 @@ func (m Model) updateVolumes(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.volCursor--
 		}
 	case "d":
-		if m.volCursor >= len(m.volumes) {
+		if m.busy || m.volCursor >= len(m.volumes) {
 			return m, nil
 		}
 		v := m.volumes[m.volCursor]
@@ -84,7 +72,7 @@ func (m Model) updateNetworks(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.netCursor--
 		}
 	case "d":
-		if m.netCursor >= len(m.networks) {
+		if m.busy || m.netCursor >= len(m.networks) {
 			return m, nil
 		}
 		n := m.networks[m.netCursor]
@@ -96,12 +84,30 @@ func (m Model) updateNetworks(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) volumeListBody(inner int) string {
+func (m Model) volumeListBody(inner, height int) string {
+	if !m.volumesLoaded {
+		return hintStyle.Render("loading...")
+	}
+	banner := resourceBanner(m.volumesErr, len(m.volumes) > 0)
 	if len(m.volumes) == 0 {
+		if banner != "" {
+			return banner
+		}
 		return hintStyle.Render("no volumes")
 	}
+	if banner != "" {
+		if height <= 1 {
+			return banner
+		}
+		height--
+	}
+	start, end := windowRange(len(m.volumes), m.volCursor, height)
 	var b strings.Builder
-	for i, v := range m.volumes {
+	if banner != "" {
+		b.WriteString(banner + "\n")
+	}
+	for i := start; i < end; i++ {
+		v := m.volumes[i]
 		line := v.Name
 		if i == m.volCursor {
 			if pad := inner - len([]rune(line)); pad > 0 {
@@ -111,19 +117,37 @@ func (m Model) volumeListBody(inner int) string {
 		} else {
 			b.WriteString(fit(line, inner))
 		}
-		if i < len(m.volumes)-1 {
+		if i < end-1 {
 			b.WriteString("\n")
 		}
 	}
 	return b.String()
 }
 
-func (m Model) networkListBody(inner int) string {
+func (m Model) networkListBody(inner, height int) string {
+	if !m.networksLoaded {
+		return hintStyle.Render("loading...")
+	}
+	banner := resourceBanner(m.networksErr, len(m.networks) > 0)
 	if len(m.networks) == 0 {
+		if banner != "" {
+			return banner
+		}
 		return hintStyle.Render("no networks")
 	}
+	if banner != "" {
+		if height <= 1 {
+			return banner
+		}
+		height--
+	}
+	start, end := windowRange(len(m.networks), m.netCursor, height)
 	var b strings.Builder
-	for i, n := range m.networks {
+	if banner != "" {
+		b.WriteString(banner + "\n")
+	}
+	for i := start; i < end; i++ {
+		n := m.networks[i]
 		line := n.Name
 		if i == m.netCursor {
 			if pad := inner - len([]rune(line)); pad > 0 {
@@ -133,7 +157,7 @@ func (m Model) networkListBody(inner int) string {
 		} else {
 			b.WriteString(fit(line, inner))
 		}
-		if i < len(m.networks)-1 {
+		if i < end-1 {
 			b.WriteString("\n")
 		}
 	}
@@ -141,6 +165,12 @@ func (m Model) networkListBody(inner int) string {
 }
 
 func (m Model) volumeDetail() string {
+	if !m.volumesLoaded {
+		return hintStyle.Render("loading...")
+	}
+	if m.volumesErr != nil && len(m.volumes) == 0 {
+		return resourceBanner(m.volumesErr, false)
+	}
 	if m.volCursor >= len(m.volumes) {
 		return hintStyle.Render("no volume selected")
 	}
@@ -154,6 +184,12 @@ func (m Model) volumeDetail() string {
 }
 
 func (m Model) networkDetail() string {
+	if !m.networksLoaded {
+		return hintStyle.Render("loading...")
+	}
+	if m.networksErr != nil && len(m.networks) == 0 {
+		return resourceBanner(m.networksErr, false)
+	}
 	if m.netCursor >= len(m.networks) {
 		return hintStyle.Render("no network selected")
 	}
