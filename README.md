@@ -6,7 +6,6 @@
 
 [![Release](https://img.shields.io/github/v/release/psychedelicdevx/bosun?color=42)](https://github.com/psychedelicdevx/bosun/releases)
 [![CI](https://github.com/psychedelicdevx/bosun/actions/workflows/ci.yml/badge.svg)](https://github.com/psychedelicdevx/bosun/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/psychedelicdevx/bosun)](https://goreportcard.com/report/github.com/psychedelicdevx/bosun)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ![bosun in action](docs/demo.gif)
