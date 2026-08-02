@@ -16,6 +16,9 @@ func TestApplyTheme(t *testing.T) {
 	if got := groupStyle.GetForeground(); got != Themes["dracula"].Group {
 		t.Fatalf("dracula group = %v, want %v", got, Themes["dracula"].Group)
 	}
+	if got := warningStyle.GetForeground(); got != Themes["dracula"].Warning {
+		t.Fatalf("dracula warning = %v, want %v", got, Themes["dracula"].Warning)
+	}
 
 	ApplyTheme("nonsense")
 	if got := runningStyle.GetForeground(); got != Themes["default"].Running {

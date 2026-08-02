@@ -139,6 +139,7 @@ var demoLog = []string{
 	`level=info msg="job picked up" queue=default id=8841`,
 	`GET  /api/users/42     200   9ms`,
 	`level=warn msg="retrying upstream" attempt=2`,
+	`level=error msg="upstream failed" status=502`,
 	`GET  /assets/app.css   304   0ms`,
 	`level=info msg="job done" id=8841 dur=112ms`,
 	`POST /api/webhooks     202   5ms`,
