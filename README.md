@@ -1,8 +1,19 @@
+<div align="center">
+
 # bosun
 
-A fast terminal UI for Docker and Podman that stays out of your way. Bordered panels, one-key actions, live logs you can filter and copy, and containers, images, volumes, and networks all a keypress away. It is the tool I wanted while babysitting a dozen containers across side projects, so I built it.
+**A fast terminal UI for Docker and Podman that stays out of your way.**
+
+[![Release](https://img.shields.io/github/v/release/psychedelicdevx/bosun?color=42)](https://github.com/psychedelicdevx/bosun/releases)
+[![CI](https://github.com/psychedelicdevx/bosun/actions/workflows/ci.yml/badge.svg)](https://github.com/psychedelicdevx/bosun/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/psychedelicdevx/bosun)](https://goreportcard.com/report/github.com/psychedelicdevx/bosun)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ![bosun in action](docs/demo.gif)
+
+</div>
+
+Bordered panels, one-key actions, live logs you can filter and copy, and containers, images, volumes, and networks all a keypress away. It is the tool I wanted while babysitting a dozen containers across side projects, so I built it.
 
 ## Why
 
